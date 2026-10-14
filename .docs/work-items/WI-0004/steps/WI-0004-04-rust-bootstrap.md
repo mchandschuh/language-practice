@@ -127,3 +127,19 @@ or default-toolchain mutation is authorized by this step.
 ## Advisor review
 
 The advisor appends review rounds here after the worker completes.
+
+### Review round 1 — user-run outcome reconciliation
+
+- Advisor: API assistant
+- Work-item: `WI-0004`
+- Step: `04`
+- Reviewed at (UTC): `2026-10-14T22:38:05Z`
+
+### Findings and disposition
+
+- Severity: none for the reported outcome; evidence limitation remains.
+- Finding: The operator reports that `rust/bootstrap.sh` completed successfully
+  when run by the user. No command transcript or independent host/project
+  artifact was supplied, so this is user-reported host evidence only.
+- Decision: proven for static script scope and user-reported execution outcome;
+  portability, project correctness, and learner understanding remain unproven.

@@ -279,3 +279,19 @@ sudo, installer, build, test, or cleanup command was run by the worker.
   project behavior, and learner understanding remain unproven.
 - Exact next action: commit only the selected script and this handoff using the
   declared subject, then verify the commit summary and clean worktree.
+
+### Review round 5 — user-run outcome reconciliation
+
+- Advisor: API assistant
+- Work-item: `WI-0004`
+- Step: `02`
+- Reviewed at (UTC): `2026-10-14T22:38:05Z`
+
+### Findings and disposition
+
+- Severity: none for the reported outcome; evidence limitation remains.
+- Finding: The operator reports that `python/bootstrap.sh` completed successfully
+  when run by the user. No command transcript or independent host/project
+  artifact was supplied, so this is user-reported host evidence only.
+- Decision: proven for static script scope and user-reported execution outcome;
+  portability, project correctness, and learner understanding remain unproven.

@@ -2,7 +2,7 @@
 schema: language-practice-step/v1
 id: WI-0004
 step: "06"
-status: implemented-unproven
+status: proven
 skill: language-practice-infrastructure-design
 depends_on: ["01"]
 target: cpp/bootstrap.sh
@@ -140,4 +140,22 @@ execution, or build-directory mutation is authorized by this step.
 - Finding: The missing C++ bootstrap target is now present and executable. The
   implementation keeps installation and project-build mutations visible, bounded,
   and opt-in, and does not execute them during repository processing.
-- Decision: implemented-unproven; user-run validation required.
+- Decision: proven for static script scope; user-reported execution outcome
+  reconciled below. Portability, project correctness, and learner understanding
+  remain unproven.
+
+### Review round 2 — user-run outcome reconciliation
+
+- Advisor: API assistant
+- Work-item: `WI-0004`
+- Step: `06`
+- Reviewed at (UTC): `2026-10-14T22:38:05Z`
+
+### Findings and disposition
+
+- Severity: none for the reported outcome; evidence limitation remains.
+- Finding: The operator reports that `cpp/bootstrap.sh` completed successfully
+  when run by the user. No command transcript or independent host/project
+  artifact was supplied, so this is user-reported host evidence only.
+- Decision: proven for static script scope and user-reported execution outcome;
+  portability, project correctness, and learner understanding remain unproven.

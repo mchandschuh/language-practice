@@ -2,7 +2,7 @@
 schema: language-practice-step/v1
 id: WI-0004
 step: "05"
-status: implemented-unproven
+status: proven
 skill: language-practice-typescript
 depends_on: ["01"]
 target: typescript/bootstrap.sh
@@ -114,15 +114,19 @@ or dependency download is authorized by this step.
 
 ### Blockers and risks
 
-- The corrected bootstrap script has not yet been rerun by the user; runtime, package-installation, and host/project behavior remain unverified for this revision.
+- The operator reports a successful user-run of the corrected script; no command
+  transcript was supplied, so portability, project correctness beyond that run,
+  and learner understanding remain unverified.
 - The bootstrap script's npm installation and generated project checks require explicit user-run network/package access outside the iterator.
 - The script's example NodeNext configuration is a bootstrap default and must be reviewed against any future project module policy.
 
 ### Exact next actions
 
-1. Review the previously created root-level `package.json`, `package-lock.json`, `tsconfig.json`, and `node_modules` manually; they are user-generated and intentionally excluded from this step commit.
-2. Rerun `./typescript/bootstrap.sh` from the repository root; confirm it operates under `typescript/` and reports toolchain verification separately from project verification.
-3. Record the corrected user-run result and any project-source type-check evidence in a subsequent handoff/review update.
+1. Preserve the user-generated root-level and `typescript/` project metadata as
+   uncommitted user state unless the operator separately authorizes a project-
+   metadata commit.
+2. Retain the user-run success as host evidence only; do not promote it to a
+   portability or project-support claim.
 
 ## Advisor review
 
@@ -166,3 +170,22 @@ or dependency download is authorized by this step.
 - Follow-up: review the previously created root-level Node artifacts manually;
   rerun `./typescript/bootstrap.sh` from the repository root after the selected
   files are committed, then record the resulting host/project evidence separately.
+
+### Review round 2 — user-run outcome reconciliation
+
+- Advisor: API assistant
+- Work-item: `WI-0004`
+- Step: `05`
+- Reviewed at (UTC): `2026-10-14T22:38:05Z`
+
+### Findings and disposition
+
+- Severity: none for the reported outcome; evidence limitation remains.
+- Finding: The operator reports that the corrected `typescript/bootstrap.sh`
+  completed successfully when run by the user. No command transcript or
+  independent host/project artifact was supplied, so this is user-reported host
+  evidence only. The earlier root-level generated metadata remains uncommitted;
+  the corrected script's intended track-local behavior is recorded but not
+  independently replayed by the advisor.
+- Decision: proven for static script scope and user-reported execution outcome;
+  portability, project correctness, and learner understanding remain unproven.
