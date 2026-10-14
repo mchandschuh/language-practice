@@ -1,11 +1,11 @@
 ---
 schema: language-practice-work-item/v1
 id: WI-0001
-status: DESIGNED
+status: COMPLETE
 type: feature
 title: Initialize the language-practice Agent Skills set
 repository: /home/michael/src/github/language-practice
-branch: wi-0001-initialize-skills
+branch: wi-0001-gitignore
 authority: local work-item records under this directory
 ---
 
@@ -13,11 +13,11 @@ authority: local work-item records under this directory
 
 ## Authority and status
 
-- **Raw status:** `DESIGNED`
-- **Derived status:** `designed`
+- **Raw status:** `COMPLETE`
+- **Derived status:** `complete`
 - **Authority:** this README and the ordered `steps/` records
 - **Repository:** `/home/michael/src/github/language-practice`
-- **Branch:** `wi-0001-initialize-skills`
+- **Branch:** `wi-0001-gitignore`
 - **Baseline:** `0d67ff8` (`Initial commit`)
 - **Root record commit:** `WI-0001: doc(repo): prepare ordered skill delivery plan`
 - **Implementation commits:** one commit per ordered step after this directory is committed
@@ -94,6 +94,7 @@ iterator invocation.
 | 14 | `language-practice-rust` | 05, 07, 08, 09, 10 | `WI-0001: 14: feat(rust): add Rust conventions skill` |
 | 15 | `language-practice-typescript` | 05, 07, 08, 09, 10 | `WI-0001: 15: feat(typescript): add TypeScript conventions skill` |
 | 16 | `language-practice-cross-language-comparison` | 05, 12, 13, 14, 15 | `WI-0001: 16: feat(repo): add cross language skill` |
+| 17 | repository `.gitignore` | 16 | `WI-0001: 17: chore(repo): ignore iterator artifacts` |
 
 The order is intentionally serial even where independent language steps could
 be parallelized: each step is a separately reviewable Git checkpoint, and the
@@ -113,13 +114,14 @@ The root record proves only that the delivery plan and step records are
 documented. It does not prove that any target skill is committed, loaded by a
 runtime, or behaviorally evaluated.
 
-Each later step must validate its target skill with `skills-ref`, check relative
-references and whitespace, inspect its staged diff, and record exact evidence
-and limitations before the corresponding commit.
+Each later step must validate its target with the applicable repository checks,
+check relative references and whitespace, inspect its staged diff, and record
+exact evidence and limitations before the corresponding commit.
 
 ## Not proven or blocked
 
-- No implementation step has been processed at the time this record is written.
-- No target skill has been committed by WI-0001 yet.
+- Step 09, step 12, and step 15 statuses were reconciled from their committed
+  implementation records and completed validation handoffs.
+- Step 17 is proven by its committed ignore behavior and advisor review.
 - No runtime activation, prompt-evaluation, learner-outcome, or language
   toolchain evidence is claimed.

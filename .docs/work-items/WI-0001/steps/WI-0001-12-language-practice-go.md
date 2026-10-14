@@ -2,7 +2,7 @@
 schema: language-practice-step/v1
 id: WI-0001
 step: "12"
-status: planned
+status: proven
 skill: language-practice-go
 depends_on: ["05", "07", "08", "09", "10"]
 target: .cline/skills/language-practice-go/SKILL.md

@@ -1,0 +1,17 @@
+/.cline-iterations/
+
+# Go build and test artifacts
+/go/*.test
+/go/coverage.out
+
+# Python caches and local environments
+/python/__pycache__/
+/python/.venv/
+
+# Rust Cargo build output
+/rust/target/
+
+# TypeScript and Node-generated output
+/typescript/node_modules/
+/typescript/dist/
+/typescript/.tsbuildinfo
