@@ -122,9 +122,8 @@ or dependency download is authorized by this step.
 
 ### Exact next actions
 
-1. Preserve the user-generated root-level and `typescript/` project metadata as
-   uncommitted user state unless the operator separately authorizes a project-
-   metadata commit.
+1. The user-generated root-level and `typescript/` project metadata are committed
+   separately as a project-metadata batch; ignored `node_modules/` remains local.
 2. Retain the user-run success as host evidence only; do not promote it to a
    portability or project-support claim.
 

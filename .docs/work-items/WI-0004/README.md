@@ -1,7 +1,7 @@
 ---
 schema: language-practice-work-item/v1
 id: WI-0004
-status: IN_PROGRESS
+status: COMPLETE
 type: feature
 title: Document reproducible Linux toolchain bootstrap
 repository: /home/michael/src/github/language-practice
@@ -13,8 +13,8 @@ authority: local work-item records under this directory
 
 ## Authority and status
 
-- **Raw status:** `IN_PROGRESS`
-- **Derived status:** `implemented-unproven`
+- **Raw status:** `COMPLETE`
+- **Derived status:** `complete`
 - **Authority:** this README and the ordered `steps/` records
 - **Repository:** `/home/michael/src/github/language-practice`
 - **Branch:** `wi-0004-toolchain-bootstrap`
@@ -213,25 +213,24 @@ install software, require privileges, access the network, or mutate global state
 
 ## Not proven or blocked
 
-- No bootstrap script, toolchain installation, or dependency download is
-  executed by the iterator or advisor, so host-installation evidence is
-  intentionally unavailable.
+- The iterator and advisor did not execute bootstrap scripts, installers,
+  package managers, privileged commands, downloads, or project mutation. The
+  host-installation evidence recorded below comes only from operator-supplied
+  user-run reports.
 - The operator reports that the Python, Rust, TypeScript/Node, and C++ bootstrap
   scripts completed successfully when run by the user. These are user-reported
   outcomes without captured command transcripts or independent host/project
   evidence; they do not prove portability, support, project correctness, or
   learner understanding.
-- No user-run success report has been supplied for `go/bootstrap.sh`; step 03
-  remains `implemented-unproven` pending explicit user-run evidence.
-- The final clean-worktree gate is blocked by six preserved, untracked project
-  metadata files created during user-run bootstrap work:
-  `package.json`, `package-lock.json`, `tsconfig.json`,
-  `typescript/package.json`, `typescript/package-lock.json`, and
-  `typescript/tsconfig.json`. They are intentionally not discarded or included
-  in the script commits. The operator must separately authorize their disposition
-  before a clean `git merge --no-ff` can be completed.
-- Current local observations are Python 3.14.4, Node 24.21.0/npm 11.19.0,
-  GCC 15.2, Clang 21.1.8, and unavailable Go/rustc/Cargo/tsc/CMake.
+- The operator supplied a successful user-run report for `go/bootstrap.sh`:
+  Go `1.26.0` on Linux `arm64`, `/usr/bin/go`, with read-only `go env` output.
+  No module path was selected, so module initialization was correctly deferred.
+- The six project metadata files produced by user-run TypeScript bootstrap work
+  are now explicitly committed in a separate project-metadata batch; ignored
+  `node_modules/` remains uncommitted.
+- Current recorded observations are Python 3.14.4, Node 24.21.0/npm 11.19.0,
+  Go 1.26.0 on Linux arm64, GCC 15.2, Clang 21.1.8, and unavailable
+  rustc/Cargo/tsc/CMake.
 - Supported versions, package-manager policy, C++ standard, CMake generator,
   and exact dependency lockfile policy must be decided in the implementation
   steps or explicitly left open.
@@ -244,14 +243,17 @@ install software, require privileges, access the network, or mutate global state
 - Topic branch: `wi-0004-toolchain-bootstrap`
 - Implementation subjects present: steps 01–06 match their declared subjects;
   the repository ignore-policy commit is separately scoped as documentation.
-- User-run outcome remarks: Python, Rust, TypeScript/Node, and C++ reported
-  successful; Go has no user-run success report.
-- Final status: `IN_PROGRESS` / `implemented-unproven`; the topic branch is not
-  mergeable in the current checkout until the preserved untracked metadata is
-  explicitly handled. Even after that gate is resolved, WI-0004 must not be
-  represented as fully proven until Go is run and reported.
+- User-run outcome remarks: Python, Go, Rust, TypeScript/Node, and C++ reported
+  successful toolchain/bootstrap runs.
+- Final status: `COMPLETE` / `complete` for the documented bootstrap deliverable.
+  All six steps are `proven` for static scope and user-reported toolchain
+  execution outcomes. Project/module/dependency verification, portability, and
+  learner-understanding evidence remain outside this work item's proven scope.
 - History reconciliation: the operator-authorized rebase/squash replaced the
   original WI-0004 root-record ancestry. The WI-0004 records and shared contract
   are present in effective snapshot `f0f2826`; the original `f627883` and
   baseline `63095e9` are retained as historical references, not reachable
   ancestry claims.
+- Final merge preparation: the topic worktree is expected to be clean after the
+  separate project-metadata commit; ignored `node_modules/` is not part of Git
+  state and is intentionally preserved locally.

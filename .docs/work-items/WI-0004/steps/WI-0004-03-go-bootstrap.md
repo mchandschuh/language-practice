@@ -2,7 +2,7 @@
 schema: language-practice-step/v1
 id: WI-0004
 step: "03"
-status: implemented-unproven
+status: proven
 skill: language-practice-go
 depends_on: ["01"]
 target: go/bootstrap.sh
@@ -135,3 +135,26 @@ download is authorized by this step.
   implementation keeps installation, module, dependency, test, and vet mutations
   visible and bounded, and does not execute them during repository processing.
 - Decision: implemented-unproven; user-run validation required.
+
+### Review round 2 — user-run outcome reconciliation
+
+- Advisor: API assistant
+- Work-item: `WI-0004`
+- Step: `03`
+- Reviewed at (UTC): `2026-10-14T22:38:05Z`
+
+### Findings and disposition
+
+- Severity: none for the reported toolchain outcome; project evidence remains
+  intentionally absent.
+- Finding: The operator reports a successful user-run of `go/bootstrap.sh` with
+  Go `1.26.0` on Linux `arm64`, executable `/usr/bin/go`, and read-only
+  `go env` output. The script correctly deferred module initialization because
+  no `--module` path was selected and no `go.mod` existed.
+- Evidence: user-supplied output from the successful run. No module resolution,
+  `go mod tidy`, project test, or vet command was run.
+- Decision: proven for static script scope and user-reported Go toolchain
+  verification; module/dependency/project correctness, portability, and learner
+  understanding remain unproven.
+- Follow-up: preserve the user-selected module-path decision for a later project
+  step; do not infer a repository Go support version from Go `1.26.0`.
