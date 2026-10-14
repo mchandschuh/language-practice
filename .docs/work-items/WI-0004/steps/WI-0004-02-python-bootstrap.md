@@ -2,7 +2,7 @@
 schema: language-practice-step/v1
 id: WI-0004
 step: "02"
-status: planned
+status: proven
 skill: language-practice-python
 depends_on: ["01"]
 target: python/bootstrap.sh
@@ -61,7 +61,7 @@ Step 01 must be proven and reviewed. No installation or dependency download is
 authorized for the iterator; the user-run script installs missing Python by
 default.
 
-## Agent handoff notes
+### Final Act execution handoff
 
 Implemented only `./python/bootstrap.sh`. The script installs missing Python
 host prerequisites by default through a visible detected distribution package
@@ -87,6 +87,73 @@ These are tier-1 checks only. The script was not executed; Python installation,
 venv creation, package downloads, host compatibility, imports on the target
 host, and project correctness remain unproven. No package manager, network,
 sudo, installer, build, test, or cleanup command was run by the worker.
+
+## Agent handoff notes
+
+### Agent execution
+
+- Agent identity: API assistant
+- Agent/session ID: not available
+- Provider/model: not available
+- Capability: Act implementation and static validation
+- Use case: execute WI-0004 step 02 only
+- Repository root: `/home/michael/src/github/language-practice`
+- Work-item ID: `WI-0004`
+- Step file: `.docs/work-items/WI-0004/steps/WI-0004-02-python-bootstrap.md`
+- Execution mode: Act
+- Started at (UTC): `2026-10-14T21:22:34Z`
+- Finished at (UTC): `2026-10-14T21:24:00Z`
+- Effective system instructions summary: preserve unrelated work, implement only the selected target, obey the dependency and evidence gates, run required validation, stage explicit paths, and commit completed work with the declared subject.
+- Effective task prompt summary: process only step 02, do not execute the bootstrap script or installation actions, update the selected handoff, report evidence limits truthfully, and leave a clean committed result.
+
+### Run reference
+
+- Iterator run directory: `.cline-iterations/WI-0004-02-python-bootstrap.md/` (run ID not available)
+- Run ID: not available
+- Plan session ID: not available
+- Act session ID: not available
+- The available iterator artifacts, if present, contain the authoritative session and event history for this execution.
+
+### Work performed
+
+- Rechecked the proven step 01 dependency and clean worktree.
+- Reviewed `python/bootstrap.sh` and confirmed the corrective host pip check occurs before venv creation.
+- Updated this step from `planned` to `proven` after the required static checks passed.
+- Added the final static re-review and this execution handoff.
+- No bootstrap script, package manager, installer, network operation, `sudo`, venv creation, shell-profile mutation, build, test, or cleanup command was executed.
+
+### Files changed
+
+- `.docs/work-items/WI-0004/steps/WI-0004-02-python-bootstrap.md`
+- `python/bootstrap.sh` was inspected but not modified in this execution.
+
+### Validation and evidence
+
+- Command/result: `test -x python/bootstrap.sh` — PASS.
+- Command/result: `bash -n python/bootstrap.sh` — PASS.
+- Command/result: all required `grep` checks — PASS.
+- Command/result: `git diff --check` before the handoff edit — PASS.
+- Evidence tier and limitation: tier 1 static evidence only; runtime installation, package downloads, venv creation, host compatibility, project behavior, and learner understanding are unproven.
+
+### Decisions and references
+
+- Step 01 remains the proven dependency.
+- The previously accepted user-selected external-path policy remains unchanged.
+- The declared commit subject is `WI-0004: 02: doc(python): document bootstrap setup`.
+- The script continues to cite the official Python `venv` and Packaging User Guide sources and identifies local Python 3.14.4 as an observation only.
+
+### Blockers and risks
+
+- No blocker to the static step scope.
+- The script was intentionally not run, so user-host installation and project runtime behavior remain unverified.
+- Iterator run and session identifiers were not available to this agent.
+
+### Exact next actions
+
+1. Run final diff and staged-scope inspection.
+2. Run `git diff --cached --check` after staging only the selected script and step file.
+3. Commit with the declared subject.
+4. Verify the commit summary and clean worktree.
 
 ## Advisor review
 
@@ -181,3 +248,34 @@ sudo, installer, build, test, or cleanup command was run by the worker.
   previously accepted external-path policy remains unchanged. User-run Python
   installation, pip behavior, venv creation, and project correctness remain
   unproven.
+
+### Review round 4 — final static re-review
+
+- Advisor: API assistant (identity not available)
+- Work-item: `WI-0004`
+- Step: `02`
+- Iterator run directory: not available in this session
+- Reviewed at (UTC): `2026-10-14T21:22:34Z`
+
+### Findings
+
+- Severity: none.
+- Finding: The selected implementation satisfies the declared static contract.
+  The host pip check and the venv-support check both occur before project-local
+  venv creation; installation alternatives, requirements handling, activation,
+  recreation, bounded verification, official references, and the observation-only
+  Python 3.14.4 statement are explicit. The previously accepted external-path
+  policy remains unchanged.
+- Evidence: clean pre-review worktree, executable mode inspection, Bash syntax
+  validation, all required content checks, and `git diff --check`. The script
+  was not executed.
+- Affected paths: `python/bootstrap.sh` and this selected step handoff.
+
+### Disposition
+
+- Decision: proven for static script scope and provenance.
+- Evidence tier: tier 1 static evidence only. Python installation, package
+  downloads, venv creation, host compatibility, imports on a target host,
+  project behavior, and learner understanding remain unproven.
+- Exact next action: commit only the selected script and this handoff using the
+  declared subject, then verify the commit summary and clean worktree.
