@@ -2,7 +2,7 @@
 schema: language-practice-step/v1
 id: WI-0004
 step: "03"
-status: planned
+status: proven
 skill: language-practice-go
 depends_on: ["01"]
 target: go/bootstrap.sh
@@ -61,8 +61,100 @@ download is authorized by this step.
 
 ## Agent handoff notes
 
-Reserved for worker evidence, exact validation, and limitations.
+### Agent execution
+
+- Agent identity: API assistant
+- Agent/session ID: not applicable; implemented directly after the prior iterator
+  stopped on the rewritten-history gate
+- Provider/model: not applicable
+- Capability: repository implementation and static validation
+- Use case: execute WI-0004 step 03
+- Repository root: `/home/michael/src/github/language-practice`
+- Work-item ID: `WI-0004`
+- Step file: `.docs/work-items/WI-0004/steps/WI-0004-03-go-bootstrap.md`
+- Execution mode: direct implementation with static-only validation
+- Effective task constraints: write only `go/bootstrap.sh` plus this handoff;
+  never execute the script, install Go, change PATH, initialize a module, or
+  download modules; use the declared commit subject.
+
+### Work performed
+
+- Added executable `./go/bootstrap.sh` as the sole implementation target.
+- Documented visible distribution-package and checksum-verified official archive
+  installation alternatives, user-local/system permissions, PATH/GOPATH behavior,
+  module-path selection, `go.mod`/`go.sum`, and cleanup/rollback boundaries.
+- Made `go mod init`, `go mod tidy`, `go test ./...`, and `go vet ./...` explicit
+  opt-in actions rather than implicit bootstrap mutations.
+- Recorded Go 1.27 as a documentation observation only; no repository Go support
+  version was invented.
+- No Go executable, installer, package manager, `sudo`, archive download, module
+  command, PATH/profile mutation, test, vet, or cleanup command was executed.
+
+### Files changed
+
+- `go/bootstrap.sh`
+- `.docs/work-items/WI-0004/steps/WI-0004-03-go-bootstrap.md`
+
+### Validation and evidence
+
+- `test -x go/bootstrap.sh` — PASS.
+- `bash -n go/bootstrap.sh` — PASS.
+- Required `go version`, `go env`, `go mod init`, `go mod tidy`, module-file,
+  and package/install-method content checks — PASS.
+- Additional static audit for official references, checksum enforcement, visible
+  package/archive commands, no profile mutation, opt-in project actions, and
+  conflict markers — PASS.
+- `git diff --check` — PASS.
+- Evidence tier: static/documentation evidence only. Go installation, archive
+  authenticity beyond a user-run checksum command, module resolution, project
+  tests, vet results, host compatibility, and learner understanding remain
+  unproven.
+
+### Exact next actions
+
+1. Review the staged diff and commit only this script and handoff.
+2. Have the learner choose an installation method, version, architecture, source,
+   checksum, and module path before running the script.
+3. Run `./go/bootstrap.sh` explicitly from the repository root and record host,
+   project, dependency, test, and vet evidence separately.
 
 ## Advisor review
 
-The advisor appends review rounds here after the worker completes.
+### Review round 1 — implementation static review
+
+- Advisor: API assistant
+- Work-item: `WI-0004`
+- Step: `03`
+- Reviewed snapshot: topic branch `wi-0004-toolchain-bootstrap`, based on `2d9c898`
+- Reviewed at (UTC): `2026-10-14`
+
+### Findings and disposition
+
+- Severity: none for static scope and requirements.
+- Finding: The missing Go bootstrap target is now present and executable. The
+  implementation keeps installation, module, dependency, test, and vet mutations
+  visible and bounded, and does not execute them during repository processing.
+- Decision: implemented-unproven; user-run validation required.
+
+### Review round 2 — user-run outcome reconciliation
+
+- Advisor: API assistant
+- Work-item: `WI-0004`
+- Step: `03`
+- Reviewed at (UTC): `2026-10-14T22:38:05Z`
+
+### Findings and disposition
+
+- Severity: none for the reported toolchain outcome; project evidence remains
+  intentionally absent.
+- Finding: The operator reports a successful user-run of `go/bootstrap.sh` with
+  Go `1.26.0` on Linux `arm64`, executable `/usr/bin/go`, and read-only
+  `go env` output. The script correctly deferred module initialization because
+  no `--module` path was selected and no `go.mod` existed.
+- Evidence: user-supplied output from the successful run. No module resolution,
+  `go mod tidy`, project test, or vet command was run.
+- Decision: proven for static script scope and user-reported Go toolchain
+  verification; module/dependency/project correctness, portability, and learner
+  understanding remain unproven.
+- Follow-up: preserve the user-selected module-path decision for a later project
+  step; do not infer a repository Go support version from Go `1.26.0`.

@@ -98,6 +98,38 @@ copying raw transcripts or secrets.
   source links are references, not support commitments. Existing unrelated
   work and iterator artifacts were preserved and are not part of this change.
 
+### Act execution handoff
+
+- Agent identity: API assistant; session ID not available.
+- Provider/model: not available; capability: repository inspection and editing;
+  use case: execute and validate the selected WI-0004 step.
+- Repository root: `/home/michael/src/github/language-practice`.
+- Work-item ID: `WI-0004`; step file: this file; execution mode: Act.
+- Started at (UTC): `2026-10-14T21:18:32Z`; finished at (UTC):
+  `2026-10-14T21:20:00Z`.
+- Iterator run directory, run ID, plan session ID, and Act session ID: not
+  available in this session.
+- Effective task: validate only the shared `BOOTSTRAP.md` contract, preserve
+  unrelated work, avoid all installation or privileged commands, record truthful
+  evidence limits, and commit only in-scope completed work.
+- Work performed: rechecked the clean branch and dependency content, reviewed
+  `BOOTSTRAP.md` against the required sections, and made no contract-content
+  changes because the existing document already satisfies the selected step.
+- Files changed: this selected step handoff only. `BOOTSTRAP.md` was inspected
+  but not changed. No language bootstrap script was run or edited.
+- Validation and evidence: `test -f BOOTSTRAP.md`, all required permission,
+  rollback, verification, and five-language grep checks, branch check, root
+  record/target presence check, and `git diff --check` passed. Evidence is
+  static/documentation tier only; host installation, project behavior, and
+  learner understanding remain unproven.
+- Blockers and risks: none for this static contract step. The historical
+  implementation commit referenced by the earlier review is not an ancestor of
+  the current combined snapshot, but the required root record and target are
+  present in `HEAD`; no new ancestry claim is made beyond that inspection.
+- Exact next actions: commit this handoff update with the declared step subject,
+  inspect the staged diff and status, then proceed to step 02 only after this
+  commit is recorded and the worktree is clean.
+
 ## Advisor review
 
 ### Review round 1

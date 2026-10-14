@@ -1,0 +1,24 @@
+{
+  "name": "language-practice",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mchandschuh/language-practice.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/mchandschuh/language-practice/issues"
+  },
+  "homepage": "https://github.com/mchandschuh/language-practice#readme",
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}
