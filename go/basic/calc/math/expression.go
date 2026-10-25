@@ -1,81 +1,39 @@
 package calc
 
-import "fmt"
-
+// MathExpression is the marker interface implemented by every calculator AST
+// node. It describes expression structure; evaluation is performed by
+// Evaluator rather than by the nodes themselves.
 type MathExpression interface {
 	expressionNode()
-	Evaluate() (float64, error)
 }
 
+// NumberExpression represents a numeric literal.
 type NumberExpression struct {
 	Value float64
 }
 
-func (e NumberExpression) Evaluate() (float64, error) {
-	return e.Value, nil
-}
-
 func (*NumberExpression) expressionNode() {}
 
+// IdentifierExpression represents a named input value.
+type IdentifierExpression struct {
+	Name string
+}
+
+func (*IdentifierExpression) expressionNode() {}
+
+// UnaryExpression represents a unary operation and its operand.
 type UnaryExpression struct {
 	Operator UnaryOperator
 	Operand  MathExpression
 }
 
-func (UnaryExpression) expressionNode() {}
+func (*UnaryExpression) expressionNode() {}
 
-func (e UnaryExpression) Evaluate() (float64, error) {
-	value, err := e.Operand.Evaluate()
-	if err != nil {
-		return 0, err
-	}
-
-	switch e.Operator {
-	case Positive:
-		return value, nil
-	case Negate:
-		return -value, nil
-	case PrefixDecrement, PostfixDecrement:
-		return value - 1, nil
-	case PrefixIncrement, PostfixIncrement:
-		return value + 1, nil
-	}
-
-	return 0, fmt.Errorf("Invalid UnaryOperator: %d", e.Operator)
-}
-
+// BinaryExpression represents a binary operation and its operands.
 type BinaryExpression struct {
 	Operator BinaryOperator
 	Left     MathExpression
 	Right    MathExpression
 }
 
-func (BinaryExpression) expressionNode() {}
-
-func (e BinaryExpression) Evaluate() (float64, error) {
-	left, err := e.Left.Evaluate()
-	if err != nil {
-		return 0, err
-	}
-	right, err := e.Right.Evaluate()
-	if err != nil {
-		return 0, err
-	}
-	switch e.Operator {
-	case Add:
-		return left + right, nil
-	case Subtract:
-		return left - right, nil
-	case Multiply:
-		return left * right, nil
-	case Divide:
-		return left / right, nil
-	}
-
-	return 0, fmt.Errorf("Invalid operator: %d", e.Operator)
-}
-
-type MathExpressionJob struct {
-	Result     chan float64
-	Expression MathExpression
-}
+func (*BinaryExpression) expressionNode() {}

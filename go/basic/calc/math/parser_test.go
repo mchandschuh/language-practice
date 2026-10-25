@@ -17,6 +17,16 @@ func TestParseExpressions(t *testing.T) {
 			want:       &NumberExpression{Value: 42},
 		},
 		{
+			name:       "identifier",
+			expression: "value2",
+			want:       &IdentifierExpression{Name: "value2"},
+		},
+		{
+			name:       "underscored identifier",
+			expression: "_value",
+			want:       &IdentifierExpression{Name: "_value"},
+		},
+		{
 			name:       "decimal with exponent",
 			expression: "1.25e2",
 			want:       &NumberExpression{Value: 125},
@@ -24,7 +34,7 @@ func TestParseExpressions(t *testing.T) {
 		{
 			name:       "addition",
 			expression: "1 + 2",
-			want: BinaryExpression{
+			want: &BinaryExpression{
 				Operator: Add,
 				Left:     &NumberExpression{Value: 1},
 				Right:    &NumberExpression{Value: 2},
@@ -33,10 +43,10 @@ func TestParseExpressions(t *testing.T) {
 		{
 			name:       "precedence",
 			expression: "1 + 2 * 3",
-			want: BinaryExpression{
+			want: &BinaryExpression{
 				Operator: Add,
 				Left:     &NumberExpression{Value: 1},
-				Right: BinaryExpression{
+				Right: &BinaryExpression{
 					Operator: Multiply,
 					Left:     &NumberExpression{Value: 2},
 					Right:    &NumberExpression{Value: 3},
@@ -46,9 +56,9 @@ func TestParseExpressions(t *testing.T) {
 		{
 			name:       "parentheses override precedence",
 			expression: "(1 + 2) * 3",
-			want: BinaryExpression{
+			want: &BinaryExpression{
 				Operator: Multiply,
-				Left: BinaryExpression{
+				Left: &BinaryExpression{
 					Operator: Add,
 					Left:     &NumberExpression{Value: 1},
 					Right:    &NumberExpression{Value: 2},
@@ -59,9 +69,9 @@ func TestParseExpressions(t *testing.T) {
 		{
 			name:       "left associative subtraction",
 			expression: "10 - 3 - 2",
-			want: BinaryExpression{
+			want: &BinaryExpression{
 				Operator: Subtract,
-				Left: BinaryExpression{
+				Left: &BinaryExpression{
 					Operator: Subtract,
 					Left:     &NumberExpression{Value: 10},
 					Right:    &NumberExpression{Value: 3},
@@ -72,16 +82,16 @@ func TestParseExpressions(t *testing.T) {
 		{
 			name:       "unary minus",
 			expression: "-2 * 3",
-			want: BinaryExpression{
+			want: &BinaryExpression{
 				Operator: Multiply,
-				Left:     UnaryExpression{Operator: Negate, Operand: &NumberExpression{Value: 2}},
+				Left:     &UnaryExpression{Operator: Negate, Operand: &NumberExpression{Value: 2}},
 				Right:    &NumberExpression{Value: 3},
 			},
 		},
 		{
 			name:       "unary plus",
 			expression: "+5",
-			want: UnaryExpression{
+			want: &UnaryExpression{
 				Operator: Positive,
 				Operand:  &NumberExpression{Value: 5},
 			},
@@ -89,14 +99,14 @@ func TestParseExpressions(t *testing.T) {
 		{
 			name:       "nested and spaced expression",
 			expression: " \t(2.5 + 1.5) / (3 - 1)\n",
-			want: BinaryExpression{
+			want: &BinaryExpression{
 				Operator: Divide,
-				Left: BinaryExpression{
+				Left: &BinaryExpression{
 					Operator: Add,
 					Left:     &NumberExpression{Value: 2.5},
 					Right:    &NumberExpression{Value: 1.5},
 				},
-				Right: BinaryExpression{
+				Right: &BinaryExpression{
 					Operator: Subtract,
 					Left:     &NumberExpression{Value: 3},
 					Right:    &NumberExpression{Value: 1},
@@ -106,7 +116,7 @@ func TestParseExpressions(t *testing.T) {
 		{
 			name:       "prefix increment",
 			expression: "++5",
-			want: UnaryExpression{
+			want: &UnaryExpression{
 				Operator: PrefixIncrement,
 				Operand:  &NumberExpression{Value: 5},
 			},
@@ -114,7 +124,7 @@ func TestParseExpressions(t *testing.T) {
 		{
 			name:       "postfix increment",
 			expression: "5++",
-			want: UnaryExpression{
+			want: &UnaryExpression{
 				Operator: PostfixIncrement,
 				Operand:  &NumberExpression{Value: 5},
 			},
@@ -122,7 +132,7 @@ func TestParseExpressions(t *testing.T) {
 		{
 			name:       "prefix decrement",
 			expression: "--5",
-			want: UnaryExpression{
+			want: &UnaryExpression{
 				Operator: PrefixDecrement,
 				Operand:  &NumberExpression{Value: 5},
 			},
@@ -130,7 +140,7 @@ func TestParseExpressions(t *testing.T) {
 		{
 			name:       "postfix decrement",
 			expression: "5--",
-			want: UnaryExpression{
+			want: &UnaryExpression{
 				Operator: PostfixDecrement,
 				Operand:  &NumberExpression{Value: 5},
 			},
@@ -164,6 +174,8 @@ func TestParseRejectsInvalidExpressions(t *testing.T) {
 		".",
 		"1e",
 		"not a number",
+		"2x",
+		"$x",
 	}
 
 	for _, expression := range tests {
