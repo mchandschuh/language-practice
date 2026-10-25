@@ -47,3 +47,34 @@ run() {
             ;;
     esac
 }
+
+test() {
+    if (($# == 0)); then
+        printf 'usage: test <app> [args...]\n' >&2
+        return 2
+    fi
+
+    local repo_root app
+    repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+    app=$1
+    shift
+
+    case "$app" in
+        positiveNumbers)
+            (
+                cd "$repo_root/go" || exit
+                go test "$@" ./basic/positiveNumbers/...
+            )
+            ;;
+        calc)
+            (
+                cd "$repo_root/go" || exit
+                go test "$@" ./basic/calc/...
+            )
+            ;;
+        *)
+            printf 'unknown app: %s\n' "$app" >&2
+            return 2
+            ;;
+    esac
+}
