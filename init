@@ -1,0 +1,15 @@
+positiveNumbers() {
+    local repo_root package_dir binary
+
+    repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+    package_dir="$repo_root/go/basic/positiveNumbers"
+    binary="$repo_root/go/bin/positiveNumbers"
+
+    mkdir -p "$repo_root/go/bin" || return
+    (
+        cd "$package_dir" || exit
+        GO111MODULE=off go build -o "$binary" .
+    ) || return
+
+    "$binary" "$@"
+}
