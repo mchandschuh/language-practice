@@ -2,7 +2,7 @@
 schema: language-practice-step/v1
 id: WI-0005
 step: "10"
-status: planned
+status: implemented-unproven
 skill: language-practice-testing
 depends_on: ["09"]
 target: go/basic/calc/math/
@@ -79,3 +79,86 @@ step's reuse, race, and cleanup evidence to be reviewed.
 
 Reserved for workload design, test implementation, exact commands/results,
 race/leak evidence, review, limitations, and next action.
+
+### Design checkpoint
+
+The test workload is bounded: 16 concurrent submissions for immutable AST reuse,
+12 sequential submissions for request-local mutation isolation, a four-expression
+sequential-oracle corpus, four concurrently admitted requests during shutdown,
+and 64 evaluator construction/close cycles for the leak observation. The runtime
+admission capacity is set to the workload size for reuse tests and four for the
+shutdown test. Each request receives a distinct `Environment` input, and the
+runtime's existing admission path must clone it before evaluation. Results are
+matched by request index rather than completion order.
+
+The reuse tests parse one AST before starting requests. The isolation expression
+`x++ + ++x` verifies both returned values and request-local final state while
+checking that caller-owned input maps remain unchanged. The fixed oracle corpus
+covers precedence, unary arithmetic, prefix mutation, and postfix mutation; the
+sequential `Evaluator` computes the expected value and final environment before
+the channel evaluator is submitted. Shutdown uses the existing package barrier
+to hold active work, waits for all three queued submissions to be admitted, then
+closes the evaluator and verifies terminal `ErrEvaluatorClosed` results.
+
+Every evaluator is explicitly closed. Result waits and admission waits use a
+one-second timeout. Repeated-close observation compares `runtime.NumGoroutine`
+against the pre-test count with a tolerance of two goroutines after 64
+construction/close cycles. This is a bounded leak observation, not a universal
+goroutine-leak proof. The tests do not claim performance improvement or parallel
+worker execution; the current runtime owns one evaluator worker.
+
+### Implementation summary
+
+Added `concurrent_reuse_test.go` under the selected math package. Also updated
+the existing `lifecycle_test.go` admitted-close regression test to use its
+barrier deterministically; the test had a scheduling race where `Close` could
+complete before work began. The tests cover concurrent reuse of one immutable
+AST, isolation of mutable request environments,
+agreement with an independent sequential evaluator corpus, concurrent admission
+and cancel-first shutdown, and bounded repeated construction/close. No production
+code was changed because no reproducible correctness or lifecycle defect was
+found.
+
+### Validation and evidence
+
+- `cd go && gofmt -w basic/calc/math/concurrent_reuse_test.go`: passed.
+- `cd go && go test ./basic/calc/math -count=1`: passed.
+- `cd go && go test ./basic/calc/math -run 'Concurrent|Oracle|Repeated' -count=20`: passed.
+- `cd go && go test -race ./basic/calc/math -count=1`: passed.
+- `cd go && go vet ./basic/calc/math`: passed.
+- `git diff --check`: passed.
+- `cd go && go test ./... -count=1` remains blocked by the pre-existing,
+  out-of-scope `basic/calc/main.go:24:24` call to `parsed.Evaluate`.
+- `cd go && go vet ./...` reports the same pre-existing `parsed.Evaluate`
+  compile failure.
+- `cd go && go test -race ./... -count=1` reaches the math package successfully
+  but fails the overall command on the same unrelated compile error.
+
+Focused tests passed on the repository's Go 1.26.8 module environment. Evidence
+proves the exercised bounded workloads, request isolation, oracle comparisons,
+shutdown paths, package race schedules, and worker-count tolerance. It does not
+prove arbitrary scheduling, universal race freedom, universal leak freedom,
+performance, or repository-wide race/test/vet success while the unrelated CLI
+compile error remains.
+
+### Review checkpoint
+
+- Fixture ASTs are parsed once and never mutated by the tests.
+- Input maps are distinct per request and are checked after evaluation.
+- Results are indexed rather than assumed to complete in submission order.
+- Barriers and wait groups provide deterministic synchronization; waits have
+  explicit bounds.
+- The sequential oracle uses the direct evaluator rather than channel internals.
+- Shutdown checks active and queued terminal results and waits for admission and
+  close completion.
+- Leak measurement uses an explicit tolerance and is reported only as an
+  observation.
+- Review found no production defect or test finding worth addressing within the
+  selected scope. An unrelated untracked `.docs/work-items/WI-0004/` path was
+  present before/alongside this work and is intentionally untouched.
+
+### Next action
+
+Advisor review, final scope inspection, and commit with the exact declared
+subject. Step 11 remains gated on this step's committed reuse, race, and cleanup
+evidence.

@@ -267,11 +267,26 @@ func TestEvaluatorRuntimeCloseCancelsAdmittedRequest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	started := make(chan struct{})
+	release := make(chan struct{})
+	evaluator.beforeRun = func() {
+		close(started)
+		<-release
+	}
 	result, err := evaluator.Submit(context.Background(), &NumberExpression{Value: 7}, Environment{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := evaluator.Close(); err != nil {
+	<-started
+	closed := make(chan error, 1)
+	go func() { closed <- evaluator.Close() }()
+	select {
+	case err := <-closed:
+		t.Fatalf("close returned before active work was released: %v", err)
+	case <-time.After(20 * time.Millisecond):
+	}
+	close(release)
+	if err := <-closed; err != nil {
 		t.Fatal(err)
 	}
 	if got := receiveResult(t, result); !errors.Is(got.Err, ErrEvaluatorClosed) {
