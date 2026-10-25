@@ -173,3 +173,92 @@ func TestDispatchCancellationDoesNotBlock(t *testing.T) {
 	case <-time.After(20 * time.Millisecond):
 	}
 }
+
+func TestUnaryWorkersSelectEveryOperator(t *testing.T) {
+	tests := []struct {
+		operator UnaryOperator
+		wantName string
+		want     float64
+	}{
+		{Positive, "positive", 5},
+		{Negate, "negate", -5},
+		{PrefixDecrement, "prefix decrement", 4},
+		{PostfixDecrement, "postfix decrement", 5},
+		{PrefixIncrement, "prefix increment", 6},
+		{PostfixIncrement, "postfix increment", 5},
+	}
+	for _, test := range tests {
+		t.Run(test.wantName, func(t *testing.T) {
+			name, ok := unaryWorkerName(test.operator)
+			if !ok || name != test.wantName {
+				t.Fatalf("worker = %q, %v; want %q", name, ok, test.wantName)
+			}
+			environment := Environment{"x": 5}
+			job := UnaryOperatorJob{Context: context.Background(), Operator: test.operator, Value: 5, Environment: environment, Target: "x", Assignable: true}
+			got, done := dispatchUnaryWorker(context.Background(), job)
+			select {
+			case <-done:
+			case <-time.After(time.Second):
+				t.Fatal("unary worker did not stop")
+			}
+			if got.Err != nil || got.Value != test.want {
+				t.Fatalf("result = %+v, want %v", got, test.want)
+			}
+			if test.operator >= PrefixDecrement && environment["x"] != 4 && environment["x"] != 6 {
+				t.Fatalf("final environment = %v", environment)
+			}
+		})
+	}
+}
+
+func TestUnaryWorkersPropagateCancellationAndInvalidOperators(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	got, done := dispatchUnaryWorker(ctx, UnaryOperatorJob{Context: ctx, Operator: Positive, Value: 1, Environment: Environment{}})
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("cancelled unary worker did not stop")
+	}
+	if !errors.Is(got.Err, context.Canceled) {
+		t.Fatalf("cancellation error = %v", got.Err)
+	}
+
+	got, done = dispatchUnaryWorker(context.Background(), UnaryOperatorJob{Operator: UnaryOperator(99), Environment: Environment{}})
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("invalid unary dispatch did not complete")
+	}
+	if got.Err == nil || !strings.Contains(got.Err.Error(), "unsupported unary operator") {
+		t.Fatalf("invalid operator result = %+v", got)
+	}
+}
+
+func TestUnaryWorkersPreserveLiteralAndRejectNonAssignableMutation(t *testing.T) {
+	evaluator, err := NewEvaluator(context.Background(), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer evaluator.Close()
+
+	for _, operator := range []UnaryOperator{PrefixIncrement, PostfixIncrement, PrefixDecrement, PostfixDecrement} {
+		result, err := evaluator.Submit(context.Background(), &UnaryExpression{Operator: operator, Operand: &NumberExpression{Value: 5}}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := receiveResult(t, result)
+		if got.Err != nil {
+			t.Fatalf("literal %d error = %v", operator, got.Err)
+		}
+	}
+
+	result, err := evaluator.Submit(context.Background(), &UnaryExpression{Operator: PrefixIncrement, Operand: &UnaryExpression{Operator: Positive, Operand: &NumberExpression{Value: 5}}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := receiveResult(t, result)
+	if got.Err == nil || !strings.Contains(got.Err.Error(), "requires an identifier or literal operand") {
+		t.Fatalf("non-assignable result = %+v", got)
+	}
+}

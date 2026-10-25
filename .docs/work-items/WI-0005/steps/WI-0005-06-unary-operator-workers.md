@@ -2,7 +2,7 @@
 schema: language-practice-step/v1
 id: WI-0005
 step: "06"
-status: planned
+status: implemented-unproven
 skill: language-practice-reliability-concurrency
 depends_on: ["05"]
 target: go/basic/calc/math/
@@ -81,3 +81,63 @@ unary worker tests and review evidence.
 
 Reserved for operator design, implementation, test output, lifecycle evidence,
 review, limitations, and next action.
+
+### Design checkpoint
+
+The unary dispatch table maps each supported operator to one small worker path:
+
+| Operator | Worker | Result |
+| --- | --- | --- |
+| `Positive` | `positiveWorker` | operand unchanged |
+| `Negate` | `negateWorker` | negated operand |
+| `PrefixDecrement` | `prefixDecrementWorker` | update request state, return updated value |
+| `PostfixDecrement` | `postfixDecrementWorker` | update request state, return previous value |
+| `PrefixIncrement` | `prefixIncrementWorker` | update request state, return updated value |
+| `PostfixIncrement` | `postfixIncrementWorker` | update request state, return previous value |
+
+The unary handler owns child evaluation and ordering. It creates a typed
+`UnaryOperatorJob` after the operand is available and sends it through a
+capacity-one directional channel to the selected worker. Mutation ownership is
+explicit: the job carries the request-local environment, target name, and an
+assignability flag. Workers never mutate the AST or caller-owned input maps.
+Literal mutation retains the step 01 numeric compatibility behavior; compound
+or otherwise non-assignable mutation is rejected before worker dispatch.
+
+Workers are one-shot goroutines. Each invocation owns its input/result channels,
+selects sends and receives against the request context, emits at most one
+terminal result, and reports completion through a bounded shutdown signal. The
+unary handler waits for that signal before returning, and cancellation causes
+the worker to stop without waiting for a receiver. No worker closes a caller
+owned result channel.
+
+### Implementation summary
+
+Added `unary_workers.go` with the six explicit unary worker functions, a typed
+dispatch table, context-aware one-shot worker lifecycle, and request-state-aware
+mutation. Extended `UnaryOperatorJob` with target and assignability metadata.
+Updated the type dispatcher so all unary arithmetic and mutation computation
+flows through these workers while preserving synchronous recursive child
+dispatch and the existing single-worker deadlock avoidance.
+
+Added deterministic tests for every dispatch-table entry and result, worker
+completion, cancellation, invalid operators, literal compatibility, and
+non-assignable mutation. Existing nested, child-error, request-state, and
+single-worker tests remain in the focused package suite.
+
+### Validation and review
+
+- `cd go && gofmt -w basic/calc/math/*.go`: passed.
+- `cd go && go test ./basic/calc/math -count=1`: passed.
+- `cd go && go test ./basic/calc/math -race -count=1`: passed.
+- `cd go && go vet ./basic/calc/math`: passed.
+- `git diff --check`: passed.
+- `cd go && go test ./... -count=1` and `go vet ./...` remain blocked by the
+  pre-existing out-of-scope `basic/calc/main.go:24:24` call to `parsed.Evaluate`.
+- Review confirmed coverage of all six operators, request-local mutation,
+  prefix/postfix ordering, context-aware delivery, bounded one-shot shutdown,
+  preserved recursive dispatch, and no binary-worker or queue changes.
+
+Evidence tier: focused unary tests, race test, package vet, formatting, and
+bounded worker completion assertions. This does not prove system-wide race
+freedom or universal goroutine leak freedom. The next action is advisor review
+and step 07 binary-worker decomposition.

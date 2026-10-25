@@ -87,7 +87,9 @@ func handleUnary(ctx context.Context, expression *UnaryExpression, environment E
 		return
 	}
 
-	if expression.Operator == PrefixIncrement || expression.Operator == PostfixIncrement || expression.Operator == PrefixDecrement || expression.Operator == PostfixDecrement {
+	mutation := expression.Operator == PrefixIncrement || expression.Operator == PostfixIncrement || expression.Operator == PrefixDecrement || expression.Operator == PostfixDecrement
+	job := UnaryOperatorJob{Context: ctx, Operator: expression.Operator, Environment: environment, Result: result}
+	if mutation {
 		if identifier, ok := expression.Operand.(*IdentifierExpression); ok {
 			if identifier == nil {
 				_ = DeliverResult(ctx, result, EvaluationResult{Environment: environment, Err: fmt.Errorf("cannot increment or decrement a nil identifier expression")})
@@ -98,27 +100,17 @@ func handleUnary(ctx context.Context, expression *UnaryExpression, environment E
 				_ = DeliverResult(ctx, result, EvaluationResult{Environment: environment, Err: fmt.Errorf("identifier %q is not defined", identifier.Name)})
 				return
 			}
-			updated := value
-			if expression.Operator == PrefixIncrement || expression.Operator == PostfixIncrement {
-				updated++
-			} else {
-				updated--
-			}
-			environment[identifier.Name] = updated
-			if expression.Operator != PostfixIncrement && expression.Operator != PostfixDecrement {
-				value = updated
-			}
-			_ = DeliverResult(ctx, result, EvaluationResult{Value: value, Environment: environment})
+			job.Value, job.Target, job.Assignable = value, identifier.Name, true
+			terminal, done := dispatchUnaryWorker(ctx, job)
+			<-done
+			_ = DeliverResult(ctx, result, terminal)
 			return
 		}
 		if number, ok := expression.Operand.(*NumberExpression); ok && number != nil {
-			value := number.Value
-			if expression.Operator == PrefixIncrement || expression.Operator == PostfixIncrement {
-				value++
-			} else {
-				value--
-			}
-			_ = DeliverResult(ctx, result, EvaluationResult{Value: value, Environment: environment})
+			job.Value = number.Value
+			terminal, done := dispatchUnaryWorker(ctx, job)
+			<-done
+			_ = DeliverResult(ctx, result, terminal)
 			return
 		}
 		_ = DeliverResult(ctx, result, EvaluationResult{Environment: environment, Err: fmt.Errorf("increment or decrement requires an identifier or literal operand")})
@@ -136,16 +128,14 @@ func handleUnary(ctx context.Context, expression *UnaryExpression, environment E
 		_ = DeliverResult(ctx, result, operand)
 		return
 	}
-	value := operand.Value
-	switch expression.Operator {
-	case Positive:
-	case Negate:
-		value = -value
-	default:
-		_ = DeliverResult(ctx, result, EvaluationResult{Environment: environment, Err: fmt.Errorf("unsupported unary operator: %d", expression.Operator)})
-		return
-	}
-	_ = DeliverResult(ctx, result, EvaluationResult{Value: value, Environment: environment})
+	job.Context, job.Value = ctx, operand.Value
+	terminal, done := dispatchUnaryWorker(ctx, job)
+	<-done
+	_ = DeliverResult(ctx, result, terminal)
+}
+
+func errInvalidUnaryOperator(operator UnaryOperator) error {
+	return fmt.Errorf("unsupported unary operator: %d", operator)
 }
 
 func handleBinary(ctx context.Context, expression *BinaryExpression, environment Environment, result chan<- EvaluationResult, depth int) {

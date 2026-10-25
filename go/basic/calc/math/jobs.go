@@ -76,6 +76,8 @@ type UnaryOperatorJob struct {
 	Operator    UnaryOperator
 	Value       float64
 	Environment Environment
+	Target      string
+	Assignable  bool
 	Result      chan<- EvaluationResult
 }
 
