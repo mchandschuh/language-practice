@@ -37,9 +37,3 @@ type BinaryExpression struct {
 }
 
 func (*BinaryExpression) expressionNode() {}
-
-// MathExpressionJob is retained for the later channel evaluator steps.
-type MathExpressionJob struct {
-	Result     chan float64
-	Expression MathExpression
-}

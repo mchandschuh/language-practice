@@ -2,7 +2,7 @@
 schema: language-practice-step/v1
 id: WI-0005
 step: "03"
-status: planned
+status: implemented-unproven
 skill: language-practice-go
 depends_on: ["02"]
 target: go/basic/calc/math/
@@ -89,3 +89,52 @@ and ownership table to pass.
 
 Reserved for protocol design, implementation, exact test commands/results,
 review, evidence tier, limitations, and next action.
+
+### Design checkpoint
+
+The protocol uses distinct `ExpressionJob`, `NumberJob`, `IdentifierJob`,
+`UnaryJob`, `BinaryJob`, `UnaryOperatorJob`, and `BinaryOperatorJob` values.
+Each job carries the request `context.Context`, request-owned `Environment`,
+typed expression/operator inputs, and a `chan<- EvaluationResult` destination.
+`EvaluationResult` carries the value, final request state, and an explicit error
+so workers preserve failures instead of logging them. `DeliverResult` selects on
+the request context while sending and never starts a goroutine.
+
+| Message | Producer | Consumer | Result owner | Close owner |
+| --- | --- | --- | --- | --- |
+| expression job | public evaluator | type dispatcher | submitting request | creator/no close for one-shot |
+| unary job | unary dispatcher | unary operator worker | parent evaluator | creator |
+| binary job | binary dispatcher | binary operator worker | parent evaluator | creator |
+
+`NewResultChannel` creates a capacity-one channel. Buffering permits one terminal
+result to be delivered without a receiver scheduling race while preserving
+one-shot bounded cardinality. The submitting request owns that channel; workers
+only send through its directional view and never close it. Errors belong in the
+result because every job needs one terminal success or failure value.
+
+### Implementation summary
+
+Added the typed job protocol and `EvaluationResult` in `jobs.go`, including
+validation for nil contexts, expressions, environments, destinations, and
+operators. Added cancellation-aware `DeliverResult` and a buffered result
+constructor. Removed the obsolete float-only `MathExpressionJob`; sequential
+evaluation behavior was otherwise unchanged. Added protocol tests covering
+field preservation, typed job validation, success/error results, buffered
+delivery, and cancellation.
+
+### Validation and review
+
+- `cd go && gofmt -w basic/calc/math/expression.go basic/calc/math/jobs.go basic/calc/math/jobs_test.go`: passed.
+- `cd go && go test ./basic/calc/math -count=1`: passed.
+- `cd go && go vet ./basic/calc/math`: passed.
+- `git diff --check`: passed.
+- `cd go && go test ./... -count=1` and `go vet ./...` reach the existing
+  `go/basic/calc/main.go` failure (`parsed.Evaluate undefined`); the focused
+  package remains green and this step did not alter that out-of-scope caller.
+- Review checked directional result ownership, one-shot buffering, cancellation
+  behavior, explicit error preservation, validation, absence of goroutines and
+  unbounded queues, and selected-path scope. No worker lifecycle claim is made.
+
+Evidence tier: focused typed-protocol evidence. The next action is step 04,
+which may add evaluator lifecycle and root submission without changing this
+protocol's ownership contract.
