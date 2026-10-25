@@ -2,7 +2,7 @@
 schema: language-practice-step/v1
 id: WI-0005
 step: "02"
-status: planned
+status: implemented-unproven
 skill: language-practice-go
 depends_on: ["01"]
 target: go/basic/calc/math/
@@ -91,3 +91,45 @@ environment contract and passing sequential evidence.
 
 Reserved for design, implementation, test output, review findings, evidence
 tier, limitations, and next action.
+
+### Design checkpoint
+
+- Identifiers use the ASCII grammar `[A-Za-z_][A-Za-z0-9_]*`; names are
+  case-sensitive and invalid starts continue to use the parser's positional
+  errors.
+- `IdentifierExpression` is an immutable pointer AST node containing only its
+  name. Runtime values are held in an explicit `Environment` map.
+- `EvaluateWithEnvironment` copies the caller's map before evaluation and
+  returns the value plus the private final environment. The AST and evaluator
+  remain stateless. This prevents one request's mutation from changing caller
+  input or another request's state; concurrent safety itself is deferred to
+  step 10.
+- Prefix identifier increment/decrement updates the private binding and returns
+  the updated value. Postfix forms return the old value and still update the
+  binding. Missing identifiers and non-assignable increment operands return
+  errors. Literal increment/decrement retain step 01's numeric compatibility
+  semantics.
+
+### Implementation summary
+
+Added identifier parsing and `IdentifierExpression`, the cloneable `Environment`
+type, and sequential environment-aware evaluation. The original stateless
+`Evaluate` API remains unchanged. Added tests for repeated AST evaluation,
+input isolation, identifier mutation, missing identifiers, and non-assignable
+operands.
+
+### Validation and review
+
+- `gofmt -w go/basic/calc/math/*.go`: passed.
+- `GO111MODULE=off go test ./go/basic/calc/math -count=1`: passed.
+- `GO111MODULE=off go vet ./go/basic/calc/math`: passed.
+- `git diff --check`: passed.
+- Module-mode repository-wide validation remains blocked because this checkout
+  has no `go.mod`; concurrent/race, channel, lifecycle, and performance claims
+  are not made by this step.
+- Review checked AST immutability, environment copying, mutation return values,
+  missing-input errors, parser grammar, and selected-path scope.
+
+Evidence tier: focused sequential correctness and state-isolation evidence.
+The next action is to use this committed environment contract when defining
+typed evaluation jobs in step 03.

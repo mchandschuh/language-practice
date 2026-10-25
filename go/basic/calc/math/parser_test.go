@@ -17,6 +17,16 @@ func TestParseExpressions(t *testing.T) {
 			want:       &NumberExpression{Value: 42},
 		},
 		{
+			name:       "identifier",
+			expression: "value2",
+			want:       &IdentifierExpression{Name: "value2"},
+		},
+		{
+			name:       "underscored identifier",
+			expression: "_value",
+			want:       &IdentifierExpression{Name: "_value"},
+		},
+		{
 			name:       "decimal with exponent",
 			expression: "1.25e2",
 			want:       &NumberExpression{Value: 125},
@@ -164,6 +174,8 @@ func TestParseRejectsInvalidExpressions(t *testing.T) {
 		".",
 		"1e",
 		"not a number",
+		"2x",
+		"$x",
 	}
 
 	for _, expression := range tests {

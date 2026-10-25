@@ -153,8 +153,11 @@ func (p *Parser) parsePrimary() (MathExpression, error) {
 	if p.peek() == '(' {
 		return p.parseParenthesis()
 	}
+	if isIdentifierStart(p.peek()) {
+		return p.parseIdentifier()
+	}
 	if !isDigit(p.peek()) && p.peek() != '.' {
-		return nil, p.errorf("expected a number or parenthesized expression; got %q", p.peek())
+		return nil, p.errorf("expected an identifier, number, or parenthesized expression; got %q", p.peek())
 	}
 
 	value, err := p.parseNumber()
@@ -162,6 +165,15 @@ func (p *Parser) parsePrimary() (MathExpression, error) {
 		return nil, err
 	}
 	return &NumberExpression{Value: value}, nil
+}
+
+func (p *Parser) parseIdentifier() (MathExpression, error) {
+	start := p.position
+	p.consume()
+	for isIdentifierPart(p.peek()) {
+		p.consume()
+	}
+	return &IdentifierExpression{Name: p.expression[start:p.position]}, nil
 }
 
 func (p *Parser) parseParenthesis() (MathExpression, error) {
@@ -289,4 +301,12 @@ func (p *Parser) errorf(format string, args ...any) error {
 
 func isDigit(c byte) bool {
 	return c >= '0' && c <= '9'
+}
+
+func isIdentifierStart(c byte) bool {
+	return c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
+}
+
+func isIdentifierPart(c byte) bool {
+	return isIdentifierStart(c) || isDigit(c)
 }

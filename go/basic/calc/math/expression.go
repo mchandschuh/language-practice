@@ -14,6 +14,13 @@ type NumberExpression struct {
 
 func (*NumberExpression) expressionNode() {}
 
+// IdentifierExpression represents a named input value.
+type IdentifierExpression struct {
+	Name string
+}
+
+func (*IdentifierExpression) expressionNode() {}
+
 // UnaryExpression represents a unary operation and its operand.
 type UnaryExpression struct {
 	Operator UnaryOperator
