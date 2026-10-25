@@ -3,6 +3,7 @@ package calc
 import (
 	"context"
 	"errors"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -260,5 +261,146 @@ func TestUnaryWorkersPreserveLiteralAndRejectNonAssignableMutation(t *testing.T)
 	got := receiveResult(t, result)
 	if got.Err == nil || !strings.Contains(got.Err.Error(), "requires an identifier or literal operand") {
 		t.Fatalf("non-assignable result = %+v", got)
+	}
+}
+
+func TestBinaryWorkersSelectEveryOperatorAndPreserveOperandOrder(t *testing.T) {
+	tests := []struct {
+		operator BinaryOperator
+		name     string
+		left     float64
+		right    float64
+		want     float64
+	}{
+		{Add, "add", 2, 3, 5},
+		{Subtract, "subtract", 9, 4, 5},
+		{Multiply, "multiply", 2, 3, 6},
+		{Divide, "divide", 20, 4, 5},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			name, ok := binaryWorkerName(test.operator)
+			if !ok || name != test.name {
+				t.Fatalf("worker = %q, %v; want %q", name, ok, test.name)
+			}
+			got, done := dispatchBinaryWorker(context.Background(), BinaryOperatorJob{
+				Context: context.Background(), Operator: test.operator,
+				Left: test.left, Right: test.right, Environment: Environment{},
+			})
+			select {
+			case <-done:
+			case <-time.After(time.Second):
+				t.Fatal("binary worker did not stop")
+			}
+			if got.Err != nil || got.Value != test.want {
+				t.Fatalf("result = %+v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
+func TestBinaryWorkersPropagateCancellationAndInvalidOperators(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	got, done := dispatchBinaryWorker(ctx, BinaryOperatorJob{
+		Context: ctx, Operator: Add, Environment: Environment{}, Left: 1, Right: 2,
+	})
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("cancelled binary worker did not stop")
+	}
+	if !errors.Is(got.Err, context.Canceled) {
+		t.Fatalf("cancellation error = %v", got.Err)
+	}
+
+	got, done = dispatchBinaryWorker(context.Background(), BinaryOperatorJob{
+		Operator: BinaryOperator(99), Environment: Environment{}, Left: 1, Right: 2,
+	})
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("invalid binary dispatch did not complete")
+	}
+	if got.Err == nil || !strings.Contains(got.Err.Error(), "unsupported binary operator") {
+		t.Fatalf("invalid operator result = %+v", got)
+	}
+}
+
+func TestBinaryWorkersPreserveFloatingPointDivisionByZero(t *testing.T) {
+	got, done := dispatchBinaryWorker(context.Background(), BinaryOperatorJob{
+		Context: context.Background(), Operator: Divide, Left: 1, Right: 0,
+		Environment: Environment{},
+	})
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("division worker did not stop")
+	}
+	if got.Err != nil || !math.IsInf(got.Value, 1) {
+		t.Fatalf("division by zero result = %+v, want positive infinity", got)
+	}
+}
+
+func TestBinaryDispatchCancellationStopsBeforeSiblingScheduling(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	result := NewResultChannel()
+	dispatchExpression(ctx, &BinaryExpression{
+		Operator: Add,
+		Left:     &NumberExpression{Value: 1},
+		Right:    &NumberExpression{Value: 2},
+	}, Environment{}, result, 0)
+	select {
+	case got := <-result:
+		t.Fatalf("cancelled binary dispatch delivered result: %+v", got)
+	case <-time.After(20 * time.Millisecond):
+	}
+}
+
+func TestEvaluatorRuntimeBinaryMatchesSequentialOracle(t *testing.T) {
+	expression, err := Parse("(9 - 4) / 5 + 2 * 3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := (Evaluator{}).Evaluate(expression)
+	if err != nil {
+		t.Fatal(err)
+	}
+	evaluator, err := NewEvaluator(context.Background(), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer evaluator.Close()
+	result, err := evaluator.Submit(context.Background(), expression, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := receiveResult(t, result)
+	if got.Err != nil || got.Value != want {
+		t.Fatalf("channel result = %+v, sequential value = %v", got, want)
+	}
+}
+
+func TestEvaluatorRuntimeBinaryChildErrorsShortCircuit(t *testing.T) {
+	evaluator, err := NewEvaluator(context.Background(), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer evaluator.Close()
+
+	tests := []MathExpression{
+		&BinaryExpression{Operator: Add, Left: &IdentifierExpression{Name: "missing"}, Right: &NumberExpression{Value: 1}},
+		&BinaryExpression{Operator: Add, Left: &NumberExpression{Value: 1}, Right: &IdentifierExpression{Name: "missing"}},
+		&BinaryExpression{Operator: BinaryOperator(99), Left: &NumberExpression{Value: 1}, Right: &NumberExpression{Value: 2}},
+	}
+	for _, expression := range tests {
+		result, err := evaluator.Submit(context.Background(), expression, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := receiveResult(t, result); got.Err == nil {
+			t.Fatalf("expression %T returned nil error", expression)
+		}
 	}
 }

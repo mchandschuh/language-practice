@@ -138,6 +138,10 @@ func errInvalidUnaryOperator(operator UnaryOperator) error {
 	return fmt.Errorf("unsupported unary operator: %d", operator)
 }
 
+func errInvalidBinaryOperator(operator BinaryOperator) error {
+	return fmt.Errorf("unsupported binary operator: %d", operator)
+}
+
 func handleBinary(ctx context.Context, expression *BinaryExpression, environment Environment, result chan<- EvaluationResult, depth int) {
 	if expression == nil {
 		_ = DeliverResult(ctx, result, EvaluationResult{Environment: environment, Err: fmt.Errorf("cannot evaluate a nil binary expression")})
@@ -167,19 +171,15 @@ func handleBinary(ctx context.Context, expression *BinaryExpression, environment
 		return
 	}
 
-	var value float64
-	switch expression.Operator {
-	case Add:
-		value = left.Value + right.Value
-	case Subtract:
-		value = left.Value - right.Value
-	case Multiply:
-		value = left.Value * right.Value
-	case Divide:
-		value = left.Value / right.Value
-	default:
-		_ = DeliverResult(ctx, result, EvaluationResult{Environment: environment, Err: fmt.Errorf("unsupported binary operator: %d", expression.Operator)})
-		return
+	job := BinaryOperatorJob{
+		Context:     ctx,
+		Operator:    expression.Operator,
+		Left:        left.Value,
+		Right:       right.Value,
+		Environment: environment,
+		Result:      result,
 	}
-	_ = DeliverResult(ctx, result, EvaluationResult{Value: value, Environment: environment})
+	terminal, done := dispatchBinaryWorker(ctx, job)
+	<-done
+	_ = DeliverResult(ctx, result, terminal)
 }
