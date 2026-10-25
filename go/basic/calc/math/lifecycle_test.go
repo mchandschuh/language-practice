@@ -278,3 +278,50 @@ func TestEvaluatorRuntimeCloseCancelsAdmittedRequest(t *testing.T) {
 		t.Fatalf("close result = %+v", got)
 	}
 }
+
+func TestEvaluatorRuntimeCloseDrainsQueuedRequests(t *testing.T) {
+	evaluator, err := NewEvaluator(context.Background(), 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	started := make(chan struct{})
+	release := make(chan struct{})
+	var barrier sync.Once
+	evaluator.beforeRun = func() {
+		barrier.Do(func() {
+			close(started)
+			<-release
+		})
+	}
+	first, err := evaluator.Submit(context.Background(), &NumberExpression{Value: 1}, Environment{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-started
+	second, err := evaluator.Submit(context.Background(), &NumberExpression{Value: 2}, Environment{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	closed := make(chan error, 1)
+	go func() { closed <- evaluator.Close() }()
+	select {
+	case err := <-closed:
+		t.Fatalf("close returned before active work was released: %v", err)
+	case <-time.After(20 * time.Millisecond):
+	}
+	close(release)
+	if got := receiveResult(t, first); !errors.Is(got.Err, ErrEvaluatorClosed) {
+		t.Fatalf("active result = %+v", got)
+	}
+	if got := receiveResult(t, second); !errors.Is(got.Err, ErrEvaluatorClosed) {
+		t.Fatalf("queued result = %+v", got)
+	}
+	select {
+	case err := <-closed:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("close did not wait for active worker")
+	}
+}

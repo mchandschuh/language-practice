@@ -15,6 +15,9 @@ const DefaultQueueCapacity = 16
 
 type evaluatorRequest struct {
 	context     context.Context
+	caller      context.Context
+	cancel      context.CancelFunc
+	stopCaller  func() bool
 	expression  MathExpression
 	environment Environment
 	result      chan EvaluationResult
@@ -73,20 +76,33 @@ func (e *EvaluatorRuntime) Submit(ctx context.Context, expression MathExpression
 		return nil, ErrNilExpression
 	}
 	result := NewResultChannel()
-	request := evaluatorRequest{context: ctx, expression: expression, environment: input.Clone(), result: result}
+	requestContext, cancel := context.WithCancel(e.context)
+	stopCaller := context.AfterFunc(ctx, cancel)
+	request := evaluatorRequest{
+		context: requestContext, caller: ctx, cancel: cancel, stopCaller: stopCaller,
+		expression: expression, environment: input.Clone(), result: result,
+	}
 	select {
 	case e.slots <- struct{}{}:
 	case <-ctx.Done():
+		stopCaller()
+		cancel()
 		return nil, ctx.Err()
 	case <-e.done:
+		stopCaller()
+		cancel()
 		return nil, ErrEvaluatorClosed
 	case <-e.context.Done():
+		stopCaller()
+		cancel()
 		return nil, ErrEvaluatorClosed
 	}
 
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.closed || e.context.Err() != nil {
+		request.stopCaller()
+		request.cancel()
 		e.releaseSlot()
 		return nil, ErrEvaluatorClosed
 	}
@@ -133,7 +149,9 @@ func (e *EvaluatorRuntime) drain() {
 	for {
 		select {
 		case request := <-e.queue:
-			_ = DeliverResult(request.context, request.result, EvaluationResult{Environment: request.environment, Err: ErrEvaluatorClosed})
+			request.stopCaller()
+			request.cancel()
+			deliverTerminal(request.result, EvaluationResult{Environment: request.environment, Err: ErrEvaluatorClosed})
 			e.releaseSlot()
 		default:
 			return
@@ -146,11 +164,24 @@ func (e *EvaluatorRuntime) run(request evaluatorRequest) {
 		e.beforeRun()
 	}
 	value, environment, err := dispatchEvaluate(request.context, request.expression, request.environment)
-	if e.isClosed() {
+	request.stopCaller()
+	request.cancel()
+	if e.isClosed() && isCancellation(err) && request.caller.Err() == nil {
 		err = ErrEvaluatorClosed
 	}
-	_ = DeliverResult(request.context, request.result, EvaluationResult{Value: value, Environment: environment, Err: err})
+	deliverTerminal(request.result, EvaluationResult{Value: value, Environment: environment, Err: err})
 	e.releaseSlot()
+}
+
+func isCancellation(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+}
+
+// deliverTerminal is used after a request has been admitted. Result channels
+// are capacity one and owned by the request, so terminal delivery cannot block
+// and must not be suppressed by cancellation of the work context.
+func deliverTerminal(destination chan<- EvaluationResult, result EvaluationResult) {
+	destination <- result
 }
 
 func (e *EvaluatorRuntime) isClosed() bool {
