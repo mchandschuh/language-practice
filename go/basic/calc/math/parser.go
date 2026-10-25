@@ -29,8 +29,13 @@ func (p *Parser) Parse() (MathExpression, error) {
 	return result, nil
 }
 
-func parse(expression string) (MathExpression, error) {
+// Parse parses an arithmetic expression into its expression tree.
+func Parse(expression string) (MathExpression, error) {
 	return (&Parser{expression: expression}).Parse()
+}
+
+func parse(expression string) (MathExpression, error) {
+	return Parse(expression)
 }
 
 func (p *Parser) parseExpression() (MathExpression, error) {
@@ -102,20 +107,41 @@ func (p *Parser) parseMultiplicative() (MathExpression, error) {
 func (p *Parser) parseUnary() (MathExpression, error) {
 	p.skipWhitespace()
 
-	switch p.peek() {
-	case '+':
-		p.consume()
-		return p.parseUnary()
-	case '-':
-		p.consume()
-		operand, err := p.parseUnary()
-		if err != nil {
-			return nil, err
+	op := Positive
+	switch {
+	case p.tryConsumeIf('+'):
+		if p.tryConsumeIf('+') {
+			op = PrefixIncrement
 		}
-		return UnaryExpression{Operator: Negate, Operand: operand}, nil
+	case p.tryConsumeIf('-'):
+		op = Negate
+		if p.tryConsumeIf('-') {
+			op = PrefixDecrement
+		}
 	default:
-		return p.parsePrimary()
+		return p.parsePostfix()
 	}
+
+	operand, err := p.parseUnary()
+	if err != nil {
+		return nil, err
+	}
+	return UnaryExpression{Operator: op, Operand: operand}, nil
+}
+
+func (p *Parser) parsePostfix() (MathExpression, error) {
+	operand, err := p.parsePrimary()
+	if err != nil {
+		return nil, err
+	}
+
+	if p.tryConsumePair('+', '+') {
+		return UnaryExpression{Operator: PostfixIncrement, Operand: operand}, nil
+	}
+	if p.tryConsumePair('-', '-') {
+		return UnaryExpression{Operator: PostfixDecrement, Operand: operand}, nil
+	}
+	return operand, nil
 }
 
 func (p *Parser) parsePrimary() (MathExpression, error) {
@@ -204,6 +230,16 @@ func (p *Parser) peek() byte {
 	return p.expression[p.position]
 }
 
+func (p *Parser) peekAhead(n int) byte {
+	if p.eof() {
+		return 0
+	}
+	if p.position+n >= len(p.expression) {
+		return 0
+	}
+	return p.expression[p.position+n]
+}
+
 func (p *Parser) consume() byte {
 	if p.eof() {
 		return 0
@@ -211,6 +247,25 @@ func (p *Parser) consume() byte {
 	c := p.expression[p.position]
 	p.position++
 	return c
+}
+
+func (p *Parser) tryConsumeIf(c byte) bool {
+	if p.peek() != c {
+		return false
+	}
+	p.position++
+	return true
+}
+
+func (p *Parser) tryConsumePair(first, second byte) bool {
+	if p.peek() != first {
+		return false
+	}
+	if p.peekAhead(1) != second {
+		return false
+	}
+	p.position += 2
+	return true
 }
 
 func (p *Parser) skipWhitespace() {

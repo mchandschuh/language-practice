@@ -13,3 +13,37 @@ positiveNumbers() {
 
     "$binary" "$@"
 }
+
+calc() {
+    local repo_root binary
+
+    repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+    binary="$repo_root/go/bin/calc"
+
+    mkdir -p "$repo_root/go/bin" || return
+    (
+        cd "$repo_root/go" || exit
+        go build -o "$binary" ./basic/calc
+    ) || return
+
+    "$binary" "$@"
+}
+
+run() {
+    if (($# == 0)); then
+        printf 'usage: run <app> [args...]\n' >&2
+        return 2
+    fi
+
+    local app=$1
+    shift
+
+    case "$app" in
+        positiveNumbers) positiveNumbers "$@" ;;
+        calc) calc "$@" ;;
+        *)
+            printf 'unknown app: %s\n' "$app" >&2
+            return 2
+            ;;
+    esac
+}
