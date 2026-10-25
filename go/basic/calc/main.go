@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
@@ -9,23 +11,40 @@ import (
 )
 
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "usage: calc <expression>")
-		os.Exit(2)
+	os.Exit(run(context.Background(), os.Args[1:], os.Stdout, os.Stderr))
+}
+
+func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	if len(args) == 0 {
+		fmt.Fprintln(stderr, "usage: calc <expression>")
+		return 2
 	}
 
-	expression := strings.Join(os.Args[1:], " ")
+	expression := strings.Join(args, " ")
 	parsed, err := calc.Parse(expression)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		fmt.Fprintln(stderr, err)
+		return 1
 	}
 
-	result, err := parsed.Evaluate()
+	evaluator, err := calc.NewEvaluator(ctx, calc.DefaultQueueCapacity)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	defer evaluator.Close()
+
+	results, err := evaluator.Submit(ctx, parsed, calc.Environment{})
+	if err != nil {
+		fmt.Fprintln(stderr, err)
+		return 1
+	}
+	result := <-results
+	if result.Err != nil {
+		fmt.Fprintln(stderr, result.Err)
+		return 1
 	}
 
-	fmt.Println(result)
+	fmt.Fprintln(stdout, result.Value)
+	return 0
 }
