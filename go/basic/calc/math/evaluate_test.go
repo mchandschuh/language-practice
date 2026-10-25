@@ -25,7 +25,7 @@ func TestEvaluateExpressions(t *testing.T) {
 				t.Fatalf("Parse(%q) returned an unexpected error: %v", test.expression, err)
 			}
 
-			got, err := Evaluate(expression)
+			got, err := expression.Evaluate()
 			if err != nil {
 				t.Fatalf("Evaluate(Parse(%q)) returned an unexpected error: %v", test.expression, err)
 			}

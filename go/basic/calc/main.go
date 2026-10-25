@@ -21,7 +21,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	result, err := calc.Evaluate(parsed)
+	result, err := parsed.Evaluate()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
