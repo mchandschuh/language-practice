@@ -20,22 +20,27 @@ type evaluatorRequest struct {
 	result      chan EvaluationResult
 }
 
-// EvaluatorRuntime owns a bounded root queue and one worker. It deliberately
-// delegates computation to the sequential evaluator until later steps add
-// type-specific workers.
+// EvaluatorRuntime owns bounded root admission and one worker. The worker
+// delegates expression computation to the channel-based dispatcher.
 type EvaluatorRuntime struct {
 	context context.Context
 	cancel  context.CancelFunc
 	queue   chan evaluatorRequest
-	space   chan struct{}
+	slots   chan struct{}
 	done    chan struct{}
 	mu      sync.Mutex
 	closed  bool
 	workers sync.WaitGroup
+	// beforeRun is only used by package tests to hold a worker at a
+	// deterministic barrier. It is nil in normal operation.
+	beforeRun func()
 }
 
-// NewEvaluator starts an evaluator with a bounded root queue. The caller owns
-// the returned result channels; Close is idempotent and waits for the worker.
+// NewEvaluator starts an evaluator with one worker and a bounded admission
+// capacity. Capacity counts all admitted requests, including the request
+// currently being evaluated; it is not merely the buffered queue length. The
+// caller owns the returned result channels; Close is idempotent and waits for
+// the worker.
 func NewEvaluator(parent context.Context, capacity int) (*EvaluatorRuntime, error) {
 	if parent == nil {
 		parent = context.Background()
@@ -46,15 +51,17 @@ func NewEvaluator(parent context.Context, capacity int) (*EvaluatorRuntime, erro
 	ctx, cancel := context.WithCancel(parent)
 	e := &EvaluatorRuntime{
 		context: ctx, cancel: cancel, queue: make(chan evaluatorRequest, capacity),
-		space: make(chan struct{}, 1), done: make(chan struct{}),
+		slots: make(chan struct{}, capacity), done: make(chan struct{}),
 	}
 	e.workers.Add(1)
 	go e.worker()
 	return e, nil
 }
 
-// Submit admits one request, blocking only while the root queue is full. The
-// caller context and evaluator shutdown both interrupt admission.
+// Submit admits one request, blocking only while the configured admission
+// capacity is full. The caller context and evaluator shutdown both interrupt
+// admission. A successfully returned result channel represents exactly one
+// admitted request.
 func (e *EvaluatorRuntime) Submit(ctx context.Context, expression MathExpression, input Environment) (<-chan EvaluationResult, error) {
 	if ctx == nil {
 		return nil, ErrNilContext
@@ -67,29 +74,24 @@ func (e *EvaluatorRuntime) Submit(ctx context.Context, expression MathExpression
 	}
 	result := NewResultChannel()
 	request := evaluatorRequest{context: ctx, expression: expression, environment: input.Clone(), result: result}
-	for {
-		e.mu.Lock()
-		if e.closed || e.context.Err() != nil {
-			e.mu.Unlock()
-			return nil, ErrEvaluatorClosed
-		}
-		select {
-		case e.queue <- request:
-			e.mu.Unlock()
-			return result, nil
-		default:
-			e.mu.Unlock()
-		}
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-e.done:
-			return nil, ErrEvaluatorClosed
-		case <-e.context.Done():
-			return nil, ErrEvaluatorClosed
-		case <-e.space:
-		}
+	select {
+	case e.slots <- struct{}{}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-e.done:
+		return nil, ErrEvaluatorClosed
+	case <-e.context.Done():
+		return nil, ErrEvaluatorClosed
 	}
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.closed || e.context.Err() != nil {
+		e.releaseSlot()
+		return nil, ErrEvaluatorClosed
+	}
+	e.queue <- request
+	return result, nil
 }
 
 // Close prevents new admission, cancels owned context, drains admitted jobs
@@ -113,7 +115,6 @@ func (e *EvaluatorRuntime) worker() {
 	for {
 		select {
 		case request := <-e.queue:
-			e.signalSpace()
 			e.run(request)
 		case <-e.done:
 			e.drain()
@@ -132,8 +133,8 @@ func (e *EvaluatorRuntime) drain() {
 	for {
 		select {
 		case request := <-e.queue:
-			e.signalSpace()
 			_ = DeliverResult(request.context, request.result, EvaluationResult{Environment: request.environment, Err: ErrEvaluatorClosed})
+			e.releaseSlot()
 		default:
 			return
 		}
@@ -141,11 +142,15 @@ func (e *EvaluatorRuntime) drain() {
 }
 
 func (e *EvaluatorRuntime) run(request evaluatorRequest) {
+	if e.beforeRun != nil {
+		e.beforeRun()
+	}
 	value, environment, err := dispatchEvaluate(request.context, request.expression, request.environment)
 	if e.isClosed() {
 		err = ErrEvaluatorClosed
 	}
 	_ = DeliverResult(request.context, request.result, EvaluationResult{Value: value, Environment: environment, Err: err})
+	e.releaseSlot()
 }
 
 func (e *EvaluatorRuntime) isClosed() bool {
@@ -154,9 +159,10 @@ func (e *EvaluatorRuntime) isClosed() bool {
 	return e.closed
 }
 
-func (e *EvaluatorRuntime) signalSpace() {
+func (e *EvaluatorRuntime) releaseSlot() {
 	select {
-	case e.space <- struct{}{}:
+	case <-e.slots:
 	default:
+		panic("evaluator admission slot released without admission")
 	}
 }
