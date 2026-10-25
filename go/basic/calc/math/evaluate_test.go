@@ -25,12 +25,30 @@ func TestEvaluateExpressions(t *testing.T) {
 				t.Fatalf("Parse(%q) returned an unexpected error: %v", test.expression, err)
 			}
 
-			got, err := expression.Evaluate()
+			got, err := Evaluate(expression)
 			if err != nil {
 				t.Fatalf("Evaluate(Parse(%q)) returned an unexpected error: %v", test.expression, err)
 			}
 			if got != test.want {
 				t.Errorf("Evaluate(Parse(%q)) = %v, want %v", test.expression, got, test.want)
+			}
+		})
+	}
+}
+
+func TestEvaluateRejectsUnsupportedNodesAndOperators(t *testing.T) {
+	tests := []MathExpression{
+		(*NumberExpression)(nil),
+		&UnaryExpression{Operator: UnaryOperator(99), Operand: &NumberExpression{Value: 1}},
+		&BinaryExpression{Operator: BinaryOperator(99), Left: &NumberExpression{Value: 1}, Right: &NumberExpression{Value: 2}},
+		&UnaryExpression{Operator: Positive},
+		&BinaryExpression{Operator: Add, Left: &NumberExpression{Value: 1}},
+	}
+
+	for _, expression := range tests {
+		t.Run("unsupported", func(t *testing.T) {
+			if _, err := Evaluate(expression); err == nil {
+				t.Fatalf("Evaluate(%T) returned nil error", expression)
 			}
 		})
 	}

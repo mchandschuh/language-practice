@@ -69,7 +69,7 @@ func (p *Parser) parseAdditive() (MathExpression, error) {
 		if err != nil {
 			return nil, err
 		}
-		left = BinaryExpression{Operator: operator, Left: left, Right: right}
+		left = &BinaryExpression{Operator: operator, Left: left, Right: right}
 	}
 }
 
@@ -100,7 +100,7 @@ func (p *Parser) parseMultiplicative() (MathExpression, error) {
 		if err != nil {
 			return nil, err
 		}
-		left = BinaryExpression{Operator: operator, Left: left, Right: right}
+		left = &BinaryExpression{Operator: operator, Left: left, Right: right}
 	}
 }
 
@@ -126,7 +126,7 @@ func (p *Parser) parseUnary() (MathExpression, error) {
 	if err != nil {
 		return nil, err
 	}
-	return UnaryExpression{Operator: op, Operand: operand}, nil
+	return &UnaryExpression{Operator: op, Operand: operand}, nil
 }
 
 func (p *Parser) parsePostfix() (MathExpression, error) {
@@ -136,10 +136,10 @@ func (p *Parser) parsePostfix() (MathExpression, error) {
 	}
 
 	if p.tryConsumePair('+', '+') {
-		return UnaryExpression{Operator: PostfixIncrement, Operand: operand}, nil
+		return &UnaryExpression{Operator: PostfixIncrement, Operand: operand}, nil
 	}
 	if p.tryConsumePair('-', '-') {
-		return UnaryExpression{Operator: PostfixDecrement, Operand: operand}, nil
+		return &UnaryExpression{Operator: PostfixDecrement, Operand: operand}, nil
 	}
 	return operand, nil
 }

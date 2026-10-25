@@ -94,3 +94,57 @@ clean worktree.
 Reserved for design notes, implementation summary, exact commands/results,
 evidence tier, limitations, review rounds, and the exact next action. Do not
 claim channel, cancellation, race, or performance evidence in this step.
+
+### Design checkpoint
+
+- AST nodes are pointers (`*NumberExpression`, `*UnaryExpression`, and
+  `*BinaryExpression`). This gives the parser one consistent representation,
+  avoids value/pointer method-set ambiguity, and makes the immutable tree
+  reusable by later evaluators.
+- `MathExpression` is a data-only marker interface. It describes AST structure
+  and deliberately does not include `Evaluate`; the sequential `Evaluator` owns
+  runtime behavior and returns `(float64, error)`.
+- Unsupported node types, nil nodes, malformed child links, and unsupported
+  operators return errors rather than panicking or blocking.
+- Increment/decrement on literal expressions are numeric exercise semantics:
+  prefix and postfix increment return the literal plus one, and prefix and
+  postfix decrement return the literal minus one. They do not mutate the AST or
+  imply mutable-variable semantics; identifier state is deferred to step 02.
+- Binary operands are evaluated sequentially, left operand before right
+  operand. Later evaluators are compared with this sequential semantic
+  baseline, not with an implementation detail of a worker.
+
+### Implementation summary
+
+Added the stateless package-owned `Evaluator` and convenience `Evaluate`
+function, moved all evaluation dispatch out of AST nodes, normalized parser
+output to pointer nodes, and updated parser/evaluator tests for the contract.
+No identifiers, environments, goroutines, channels, or CLI changes were made.
+
+### Evidence and limitations
+
+Focused tests and repository-wide Go validation are required by this step. The
+current checkout has no `go.mod`, so module-mode `go test ./...` and `go vet
+./...` cannot run until the repository's existing Go module setup is restored.
+No channel, cancellation, race, leak, or performance behavior is claimed.
+
+### Validation and review
+
+- `gofmt -w go/basic/calc/math/*.go`: passed.
+- `GO111MODULE=off go test ./go/basic/calc/math -count=1`: passed.
+- `go test ./basic/calc/math -count=1`, `go test ./... -count=1`, and
+  `go vet ./...`: blocked by the checkout having no `go.mod`.
+- `GO111MODULE=off go test ./go/... -count=1` and `GO111MODULE=off go vet
+  ./go/...`: blocked by the pre-existing CLI import path not resolving from
+  this checkout outside its expected GOPATH/module layout.
+- `git diff --check`: passed.
+
+Review found and corrected value-node expectations left in parser tests, the
+CLI's stale node `Evaluate` call was verified to remain outside this step's
+scope, and evaluator recursion was kept on one stateless receiver. The exact
+changed paths are this handoff plus files under `go/basic/calc/math/`.
+
+Evidence tier: focused sequential package correctness and AST representation
+evidence. The next action is to use this committed baseline as the contract for
+step 02's reusable input environment; restore/define the repository Go module
+layout before claiming repository-wide validation.
