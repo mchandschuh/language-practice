@@ -141,7 +141,7 @@ func (e *EvaluatorRuntime) drain() {
 }
 
 func (e *EvaluatorRuntime) run(request evaluatorRequest) {
-	value, environment, err := (Evaluator{}).EvaluateWithEnvironment(request.expression, request.environment)
+	value, environment, err := dispatchEvaluate(request.context, request.expression, request.environment)
 	if e.isClosed() {
 		err = ErrEvaluatorClosed
 	}
