@@ -29,23 +29,68 @@ calc() {
     "$binary" "$@"
 }
 
+discover_go_command() {
+    local go_dir=$1 app=$2 main_file relative_dir match matches
+    local matches_count=0
+
+    case "$app" in
+        ""|/*|*/|*//*|.|..|*/./*|*/../*|../*|*/..)
+            return 2
+            ;;
+    esac
+
+    while IFS= read -r -d "" main_file; do
+        relative_dir="${main_file#"$go_dir"/}"
+        relative_dir="${relative_dir%/main.go}"
+        if [[ "$relative_dir" == "$app" || "$relative_dir" == */"$app" ]]; then
+            matches_count=$((matches_count + 1))
+            match=$relative_dir
+            matches="${matches:+$matches }$relative_dir"
+        fi
+    done < <(find "$go_dir" -type f -name main.go -print0)
+
+    case "$matches_count" in
+        0)
+            return 1
+            ;;
+        1)
+            printf "%s\n" "$match"
+            ;;
+        *)
+            printf "ambiguous app: %s (matches: %s)\n" "$app" "$matches" >&2
+            return 3
+            ;;
+    esac
+}
+
 run() {
     if (($# == 0)); then
         printf 'usage: run <app> [args...]\n' >&2
         return 2
     fi
 
-    local app=$1
+    local repo_root app relative_dir discovery_status
+    repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+    app=$1
     shift
 
-    case "$app" in
-        positiveNumbers) positiveNumbers "$@" ;;
-        calc) calc "$@" ;;
-        *)
-            printf 'unknown app: %s\n' "$app" >&2
-            return 2
-            ;;
+    relative_dir=$(discover_go_command "$repo_root/go" "$app")
+    discovery_status=$?
+
+    if ((discovery_status == 0)); then
+        (
+            cd "$repo_root/go" || exit
+            go run "./$relative_dir" "$@"
+        )
+        return
+    fi
+
+    case "$discovery_status" in
+        1) printf 'unknown app: %s\n' "$app" >&2 ;;
+        2) printf 'invalid app: %s\n' "$app" >&2 ;;
+        3) ;;
     esac
+    return 2
 }
 
 test() {
