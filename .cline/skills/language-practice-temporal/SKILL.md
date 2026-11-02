@@ -283,6 +283,56 @@ development server as production infrastructure. Do not connect exercises to
 Temporal Cloud or another remote Namespace without explicit configuration,
 credentials handling, and scope.
 
+The repository also provides a sourced helper for a user-owned background
+development server. It checks Temporal health rather than merely checking the
+gRPC port, records only its own PID below the user runtime directory, writes
+logs below the user state directory, and refuses to stop an external process:
+
+```bash
+source ./init
+temporal_dev_start
+temporal_dev_status
+temporal_dev_stop
+```
+
+The default server is ephemeral, matching `temporal server start-dev`. Request
+deliberate local persistence with `--persistent` or an explicit database path:
+
+```bash
+temporal_dev_start --persistent
+temporal_dev_start --db-filename "$HOME/.local/state/language-practice-temporal/temporal.db"
+```
+
+The helper binds the development Service and UI to localhost. Its state is not
+stored in the repository. Override `TEMPORAL_DEV_RUNTIME_DIR` and
+`TEMPORAL_DEV_STATE_DIR` for an isolated disposable run or when inspecting
+state locations.
+
+For a supervised user-level service, generate a unit explicitly:
+
+```bash
+source ./init
+temporal_dev_service_install
+systemctl --user status language-practice-temporal.service
+```
+
+Installation only writes a unit and runs `systemctl --user daemon-reload`; it
+does not enable or start the service unless `--enable` and/or `--start` are
+passed. Remove it, stopping an enabled/running unit, with:
+
+```bash
+temporal_dev_service_uninstall
+```
+
+Use `temporal_dev_service_uninstall --keep-running` only when the unit should
+be removed while its currently running process is left for the user to stop
+separately.
+
+This is still local development infrastructure, not a production deployment.
+The unit is user-local, does not use `sudo`, and does not enable systemd
+lingering. Use `journalctl --user -u language-practice-temporal.service` for
+logs when the unit is explicitly started.
+
 Useful local inspection commands include:
 
 ```bash

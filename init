@@ -1,7 +1,18 @@
+_language_practice_repo_root() {
+    local init_path
+
+    if [[ -n "${BASH_SOURCE[0]-}" ]]; then
+        init_path=${BASH_SOURCE[0]}
+    else
+        init_path=${(%):-%x}
+    fi
+    cd -- "$(dirname -- "$init_path")" && pwd -P
+}
+
 positiveNumbers() {
     local repo_root package_dir binary
 
-    repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+    repo_root=$(_language_practice_repo_root)
     package_dir="$repo_root/go/basic/positiveNumbers"
     binary="$repo_root/go/bin/positiveNumbers"
 
@@ -17,7 +28,7 @@ positiveNumbers() {
 calc() {
     local repo_root binary
 
-    repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+    repo_root=$(_language_practice_repo_root)
     binary="$repo_root/go/bin/calc"
 
     mkdir -p "$repo_root/go/bin" || return
@@ -70,7 +81,7 @@ run() {
     fi
 
     local repo_root app relative_dir discovery_status
-    repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+    repo_root=$(_language_practice_repo_root)
     app=$1
     shift
 
@@ -100,7 +111,7 @@ test() {
     fi
 
     local repo_root app
-    repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+    repo_root=$(_language_practice_repo_root)
     app=$1
     shift
 
@@ -122,4 +133,499 @@ test() {
             return 2
             ;;
     esac
+}
+
+# Temporal development-service helpers.
+#
+# These functions are intended to be sourced from a shell. They manage only a
+# localhost Temporal CLI development server and keep their PID/log state below
+# user-owned XDG directories, never in the repository.
+
+_temporal_dev_cli_path() {
+    local cli=${TEMPORAL_CLI:-temporal}
+
+    if [[ "$cli" == */* ]]; then
+        if [[ ! -x "$cli" ]]; then
+            printf 'Temporal CLI is not executable: %s\n' "$cli" >&2
+            printf 'Install it with /home/michael/src/shell/init/install_temporal.\n' >&2
+            return 1
+        fi
+        printf '%s\n' "$cli"
+        return 0
+    fi
+
+    if ! command -v "$cli" >/dev/null 2>&1; then
+        printf 'Temporal CLI not found: %s\n' "$cli" >&2
+        printf 'Install it with /home/michael/src/shell/init/install_temporal.\n' >&2
+        return 1
+    fi
+    command -v "$cli"
+}
+
+_temporal_dev_systemctl_path() {
+    local systemctl_command=${TEMPORAL_SYSTEMCTL:-systemctl}
+
+    if [[ "$systemctl_command" == */* ]]; then
+        if [[ ! -x "$systemctl_command" ]]; then
+            printf 'systemctl is not executable: %s\n' "$systemctl_command" >&2
+            return 1
+        fi
+        printf '%s\n' "$systemctl_command"
+        return 0
+    fi
+
+    if ! command -v "$systemctl_command" >/dev/null 2>&1; then
+        printf 'systemctl not found: %s\n' "$systemctl_command" >&2
+        return 1
+    fi
+    command -v "$systemctl_command"
+}
+
+_temporal_dev_runtime_dir() {
+    printf '%s\n' "${TEMPORAL_DEV_RUNTIME_DIR:-${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/language-practice-temporal}"
+}
+
+_temporal_dev_state_dir() {
+    printf '%s\n' "${TEMPORAL_DEV_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/language-practice-temporal}"
+}
+
+_temporal_dev_config_dir() {
+    printf '%s\n' "${TEMPORAL_DEV_CONFIG_HOME:-${XDG_CONFIG_HOME:-$HOME/.config}}/systemd/user"
+}
+
+_temporal_dev_pid_file() {
+    printf '%s/temporal.pid\n' "$(_temporal_dev_runtime_dir)"
+}
+
+_temporal_dev_log_file() {
+    printf '%s/temporal.log\n' "$(_temporal_dev_state_dir)"
+}
+
+_temporal_dev_unit_file() {
+    printf '%s/language-practice-temporal.service\n' "$(_temporal_dev_config_dir)"
+}
+
+_temporal_dev_port() {
+    printf '%s\n' "${TEMPORAL_DEV_PORT:-7233}"
+}
+
+_temporal_dev_ui_port() {
+    printf '%s\n' "${TEMPORAL_DEV_UI_PORT:-8233}"
+}
+
+_temporal_dev_address() {
+    printf 'localhost:%s\n' "$(_temporal_dev_port)"
+}
+
+_temporal_dev_validate_ports() {
+    local port ui_port
+    port=$(_temporal_dev_port)
+    ui_port=$(_temporal_dev_ui_port)
+
+    if [[ ! "$port" =~ ^[0-9]+$ || ! "$ui_port" =~ ^[0-9]+$ ]]; then
+        printf 'Temporal development ports must be numeric: %s, %s\n' "$port" "$ui_port" >&2
+        return 2
+    fi
+    if ((port < 1 || port > 65535 || ui_port < 1 || ui_port > 65535)); then
+        printf 'Temporal development ports must be between 1 and 65535: %s, %s\n' "$port" "$ui_port" >&2
+        return 2
+    fi
+}
+
+_temporal_dev_health() {
+    local cli
+    cli=$(_temporal_dev_cli_path) || return
+    "$cli" \
+        --disable-config-env \
+        --disable-config-file \
+        --address "$(_temporal_dev_address)" \
+        --command-timeout "${TEMPORAL_DEV_COMMAND_TIMEOUT:-2s}" \
+        operator cluster health >/dev/null 2>&1
+}
+
+_temporal_dev_pid_is_alive() {
+    local pid=$1
+    [[ "$pid" =~ ^[0-9]+$ ]] && kill -0 "$pid" 2>/dev/null
+}
+
+_temporal_dev_pid_is_owned() {
+    local pid=$1 cmdline port ui_port
+    port=$(_temporal_dev_port)
+    ui_port=$(_temporal_dev_ui_port)
+
+    _temporal_dev_pid_is_alive "$pid" || return 1
+
+    if [[ -r "/proc/$pid/cmdline" ]]; then
+        cmdline=$(tr '\0' ' ' <"/proc/$pid/cmdline" 2>/dev/null || true)
+    else
+        cmdline=$(ps -o args= -p "$pid" 2>/dev/null || true)
+    fi
+
+    [[ "$cmdline" == *"server start-dev"* ]] || return 1
+    [[ "$cmdline" == *"--port $port"* ]] || return 1
+    [[ "$cmdline" == *"--ui-port $ui_port"* ]] || return 1
+}
+
+_temporal_dev_pid_from_file() {
+    local pid_file pid
+    pid_file=$(_temporal_dev_pid_file)
+    [[ -r "$pid_file" ]] || return 1
+    read -r pid <"$pid_file" || return 1
+    [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+    printf '%s\n' "$pid"
+}
+
+_temporal_dev_wait_for_health() {
+    local pid=$1 deadline
+    deadline=$((SECONDS + ${TEMPORAL_DEV_START_TIMEOUT:-30}))
+
+    while ((SECONDS < deadline)); do
+        if _temporal_dev_health; then
+            return 0
+        fi
+        if ! _temporal_dev_pid_is_owned "$pid"; then
+            return 1
+        fi
+        sleep 0.2
+    done
+    _temporal_dev_health
+}
+
+_temporal_dev_wait_for_exit() {
+    local pid=$1 deadline
+    deadline=$((SECONDS + ${TEMPORAL_DEV_STOP_TIMEOUT:-10}))
+
+    while ((SECONDS < deadline)); do
+        _temporal_dev_pid_is_alive "$pid" || return 0
+        _temporal_dev_pid_is_owned "$pid" || return 0
+        sleep 0.2
+    done
+    ! _temporal_dev_pid_is_alive "$pid" || ! _temporal_dev_pid_is_owned "$pid"
+}
+
+temporal_dev_start() {
+    local persistent=0 db_filename='' cli pid_file log_file pid
+    local runtime_dir state_dir
+
+    while (($# > 0)); do
+        case "$1" in
+            --persistent)
+                persistent=1
+                shift
+                ;;
+            --db-filename)
+                (($# >= 2)) || {
+                    printf 'usage: temporal_dev_start [--persistent] [--db-filename PATH]\n' >&2
+                    return 2
+                }
+                db_filename=$2
+                shift 2
+                ;;
+            -h|--help)
+                printf 'usage: temporal_dev_start [--persistent] [--db-filename PATH]\n'
+                return 0
+                ;;
+            *)
+                printf 'unknown temporal_dev_start option: %s\n' "$1" >&2
+                return 2
+                ;;
+        esac
+    done
+
+    _temporal_dev_validate_ports || return
+    cli=$(_temporal_dev_cli_path) || return
+    pid_file=$(_temporal_dev_pid_file)
+
+    if _temporal_dev_health; then
+        if pid=$(_temporal_dev_pid_from_file) && _temporal_dev_pid_is_owned "$pid"; then
+            printf 'Temporal development server is already running (owned PID %s).\n' "$pid"
+        else
+            printf 'Temporal development server is already running at %s (not owned by this helper).\n' "$(_temporal_dev_address)"
+        fi
+        return 0
+    fi
+
+    if pid=$(_temporal_dev_pid_from_file); then
+        if _temporal_dev_pid_is_owned "$pid"; then
+            printf 'Temporal development server process %s exists; waiting for health.\n' "$pid"
+            if _temporal_dev_wait_for_health "$pid"; then
+                printf 'Temporal development server is ready at %s (PID %s).\n' "$(_temporal_dev_address)" "$pid"
+                return 0
+            fi
+            printf 'Temporal development server process %s did not become healthy. See %s.\n' "$pid" "$(_temporal_dev_log_file)" >&2
+            return 1
+        fi
+        if _temporal_dev_pid_is_alive "$pid"; then
+            printf 'Refusing to use PID file %s because PID %s belongs to another process.\n' "$pid_file" "$pid" >&2
+            return 2
+        fi
+        rm -f -- "$pid_file"
+    fi
+
+    if ((persistent == 1)) && [[ -z "$db_filename" ]]; then
+        db_filename="$(_temporal_dev_state_dir)/temporal.db"
+    fi
+    if [[ -n "$db_filename" && "$db_filename" == */ ]]; then
+        printf 'Temporal database path must name a file: %s\n' "$db_filename" >&2
+        return 2
+    fi
+
+    runtime_dir=$(_temporal_dev_runtime_dir)
+    state_dir=$(_temporal_dev_state_dir)
+    mkdir -p -- "$runtime_dir" "$state_dir" || return
+    log_file=$(_temporal_dev_log_file)
+
+    : >"$log_file" || {
+        printf 'Unable to write Temporal development log: %s\n' "$log_file" >&2
+        return 1
+    }
+
+    if [[ -n "$db_filename" ]]; then
+        mkdir -p -- "$(dirname -- "$db_filename")" || return
+    fi
+
+    if [[ -n "$db_filename" ]]; then
+        "$cli" server start-dev \
+            --ip localhost \
+            --port "$(_temporal_dev_port)" \
+            --ui-port "$(_temporal_dev_ui_port)" \
+            --db-filename "$db_filename" >>"$log_file" 2>&1 &
+    else
+        "$cli" server start-dev \
+            --ip localhost \
+            --port "$(_temporal_dev_port)" \
+            --ui-port "$(_temporal_dev_ui_port)" >>"$log_file" 2>&1 &
+    fi
+    pid=$!
+    printf '%s\n' "$pid" >"$pid_file" || {
+        kill "$pid" 2>/dev/null || true
+        printf 'Unable to write Temporal development PID file: %s\n' "$pid_file" >&2
+        return 1
+    }
+
+    if _temporal_dev_wait_for_health "$pid"; then
+        printf 'Started Temporal development server at %s (PID %s).\n' "$(_temporal_dev_address)" "$pid"
+        printf 'Web UI: http://localhost:%s\n' "$(_temporal_dev_ui_port)"
+        printf 'Log: %s\n' "$log_file"
+        return 0
+    fi
+
+    if ! _temporal_dev_pid_is_owned "$pid"; then
+        rm -f -- "$pid_file"
+        printf 'Temporal development server exited before becoming healthy. See %s.\n' "$log_file" >&2
+    else
+        printf 'Temporal development server did not become healthy within %ss (PID %s). Stopping it. See %s.\n' "${TEMPORAL_DEV_START_TIMEOUT:-30}" "$pid" "$log_file" >&2
+        kill -TERM "$pid" 2>/dev/null || true
+        _temporal_dev_wait_for_exit "$pid" || true
+        rm -f -- "$pid_file"
+    fi
+    return 1
+}
+
+temporal_dev_status() {
+    local pid cli
+    _temporal_dev_validate_ports || return
+    cli=$(_temporal_dev_cli_path) || return
+
+    if _temporal_dev_health; then
+        if pid=$(_temporal_dev_pid_from_file) && _temporal_dev_pid_is_owned "$pid"; then
+            printf 'Temporal development server: running and healthy (owned PID %s)\n' "$pid"
+        else
+            printf 'Temporal development server: running and healthy (external process)\n'
+        fi
+        printf 'Address: %s\n' "$(_temporal_dev_address)"
+        printf 'Web UI: http://localhost:%s\n' "$(_temporal_dev_ui_port)"
+        return 0
+    fi
+
+    if pid=$(_temporal_dev_pid_from_file); then
+        if _temporal_dev_pid_is_owned "$pid"; then
+            printf 'Temporal development server: process %s is running but not healthy\n' "$pid" >&2
+            printf 'Log: %s\n' "$(_temporal_dev_log_file)" >&2
+            return 1
+        fi
+        if _temporal_dev_pid_is_alive "$pid"; then
+            printf 'Temporal development server: PID file points to another process (%s)\n' "$pid" >&2
+            return 2
+        fi
+        rm -f -- "$(_temporal_dev_pid_file)"
+        printf 'Temporal development server: stopped (removed stale PID file)\n'
+        return 1
+    fi
+
+    printf 'Temporal development server: stopped\n'
+    return 1
+}
+
+temporal_dev_stop() {
+    local pid cli
+    _temporal_dev_validate_ports || return
+    pid=$(_temporal_dev_pid_from_file) || {
+        if cli=$(_temporal_dev_cli_path) && _temporal_dev_health; then
+            printf 'Temporal development server is running, but this helper does not own it.\n' >&2
+            return 2
+        fi
+        printf 'Temporal development server is not owned by this helper.\n'
+        return 1
+    }
+
+    if ! _temporal_dev_pid_is_owned "$pid"; then
+        if _temporal_dev_pid_is_alive "$pid"; then
+            printf 'Refusing to stop PID %s because it is not an owned Temporal development process.\n' "$pid" >&2
+            return 2
+        fi
+        rm -f -- "$(_temporal_dev_pid_file)"
+        printf 'Removed stale Temporal development PID file.\n'
+        return 1
+    fi
+
+    kill -TERM "$pid" 2>/dev/null || true
+    if ! _temporal_dev_wait_for_exit "$pid"; then
+        if _temporal_dev_pid_is_owned "$pid"; then
+            printf 'Temporal development server did not stop gracefully; terminating owned PID %s.\n' "$pid" >&2
+            kill -KILL "$pid" 2>/dev/null || true
+        fi
+        if ! _temporal_dev_wait_for_exit "$pid"; then
+            printf 'Unable to stop owned Temporal development process %s.\n' "$pid" >&2
+            return 1
+        fi
+    fi
+
+    rm -f -- "$(_temporal_dev_pid_file)"
+    printf 'Stopped Temporal development server (PID %s).\n' "$pid"
+}
+
+temporal_dev_service_install() {
+    local persistent=0 db_filename='' replace=0 enable=0 start=0
+    local cli systemctl unit_file unit_dir temporary_file cli_quoted db_quoted
+    local port ui_port
+
+    while (($# > 0)); do
+        case "$1" in
+            --persistent)
+                persistent=1
+                shift
+                ;;
+            --db-filename)
+                (($# >= 2)) || {
+                    printf 'usage: temporal_dev_service_install [--persistent] [--db-filename PATH] [--replace] [--enable] [--start]\n' >&2
+                    return 2
+                }
+                db_filename=$2
+                shift 2
+                ;;
+            --replace)
+                replace=1
+                shift
+                ;;
+            --enable)
+                enable=1
+                shift
+                ;;
+            --start)
+                start=1
+                shift
+                ;;
+            -h|--help)
+                printf 'usage: temporal_dev_service_install [--persistent] [--db-filename PATH] [--replace] [--enable] [--start]\n'
+                return 0
+                ;;
+            *)
+                printf 'unknown temporal_dev_service_install option: %s\n' "$1" >&2
+                return 2
+                ;;
+        esac
+    done
+
+    _temporal_dev_validate_ports || return
+    cli=$(_temporal_dev_cli_path) || return
+    systemctl=$(_temporal_dev_systemctl_path) || return
+    unit_file=$(_temporal_dev_unit_file)
+    unit_dir=$(dirname -- "$unit_file")
+
+    if [[ -e "$unit_file" && "$replace" -ne 1 ]]; then
+        printf 'Service unit already exists; pass --replace to replace it: %s\n' "$unit_file" >&2
+        return 2
+    fi
+    if ((persistent == 1)) && [[ -z "$db_filename" ]]; then
+        db_filename="$(_temporal_dev_state_dir)/temporal.db"
+    fi
+    if [[ -n "$db_filename" && "$db_filename" == */ ]]; then
+        printf 'Temporal database path must name a file: %s\n' "$db_filename" >&2
+        return 2
+    fi
+    if [[ -n "$db_filename" ]]; then
+        mkdir -p -- "$(dirname -- "$db_filename")" || return
+    fi
+
+    port=$(_temporal_dev_port)
+    ui_port=$(_temporal_dev_ui_port)
+    cli_quoted=$(printf '%q' "$cli")
+    mkdir -p -- "$unit_dir" || return
+    temporary_file=$(mktemp "$unit_dir/.language-practice-temporal.service.XXXXXX") || return
+    {
+        printf '[Unit]\n'
+        printf 'Description=Language Practice Temporal development server\n'
+        printf 'After=default.target\n\n'
+        printf '[Service]\n'
+        printf 'Type=simple\n'
+        printf 'ExecStart=%s server start-dev --ip localhost --port %s --ui-port %s' "$cli_quoted" "$port" "$ui_port"
+        if [[ -n "$db_filename" ]]; then
+            db_quoted=$(printf '%q' "$db_filename")
+            printf ' --db-filename %s' "$db_quoted"
+        fi
+        printf '\nRestart=on-failure\nRestartSec=2\nKillSignal=SIGINT\nTimeoutStopSec=20\nStandardOutput=journal\nStandardError=journal\n\n'
+        printf '[Install]\nWantedBy=default.target\n'
+    } >"$temporary_file" || {
+        rm -f -- "$temporary_file"
+        return 1
+    }
+
+    mv -- "$temporary_file" "$unit_file" || {
+        rm -f -- "$temporary_file"
+        return 1
+    }
+    "$systemctl" --user daemon-reload || return
+    if ((enable == 1)); then
+        "$systemctl" --user enable language-practice-temporal.service || return
+    fi
+    if ((start == 1)); then
+        "$systemctl" --user start language-practice-temporal.service || return
+    fi
+    printf 'Installed user service unit: %s\n' "$unit_file"
+    printf 'It is not enabled or started unless --enable and/or --start was passed.\n'
+}
+
+temporal_dev_service_uninstall() {
+    local keep_running=0 systemctl unit_file
+
+    while (($# > 0)); do
+        case "$1" in
+            --keep-running)
+                keep_running=1
+                shift
+                ;;
+            -h|--help)
+                printf 'usage: temporal_dev_service_uninstall [--keep-running]\n'
+                return 0
+                ;;
+            *)
+                printf 'unknown temporal_dev_service_uninstall option: %s\n' "$1" >&2
+                return 2
+                ;;
+        esac
+    done
+
+    systemctl=$(_temporal_dev_systemctl_path) || return
+    unit_file=$(_temporal_dev_unit_file)
+    if ((keep_running == 1)); then
+        "$systemctl" --user disable language-practice-temporal.service || return
+    else
+        "$systemctl" --user disable --now language-practice-temporal.service || return
+    fi
+    if [[ -e "$unit_file" ]]; then
+        rm -f -- "$unit_file" || return
+    fi
+    "$systemctl" --user daemon-reload || return
+    printf 'Removed user service unit: %s\n' "$unit_file"
 }
