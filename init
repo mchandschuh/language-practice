@@ -75,12 +75,34 @@ discover_go_command() {
 }
 
 run() {
+    local background=0
+
+    while (($# > 0)); do
+        case "$1" in
+            -b|--background)
+                background=1
+                shift
+                ;;
+            --)
+                shift
+                break
+                ;;
+            -*)
+                printf 'unknown run option: %s\n' "$1" >&2
+                return 2
+                ;;
+            *)
+                break
+                ;;
+        esac
+    done
+
     if (($# == 0)); then
         printf 'usage: run <app> [args...]\n' >&2
         return 2
     fi
 
-    local repo_root app relative_dir discovery_status
+    local repo_root app relative_dir discovery_status pid
     repo_root=$(_language_practice_repo_root)
     app=$1
     shift
@@ -89,6 +111,20 @@ run() {
     discovery_status=$?
 
     if ((discovery_status == 0)); then
+        if ((background == 1)); then
+            if ! command -v setsid >/dev/null 2>&1; then
+                printf 'background mode requires setsid, which is unavailable\n' >&2
+                return 1
+            fi
+            (
+                cd "$repo_root/go" || exit
+                exec setsid go run "./$relative_dir" "$@"
+            ) &
+            pid=$!
+            printf 'Started %s in background process group (PID %s).\n' "$app" "$pid"
+            return 0
+        fi
+
         (
             cd "$repo_root/go" || exit
             go run "./$relative_dir" "$@"

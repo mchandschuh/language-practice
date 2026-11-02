@@ -347,9 +347,15 @@ Service is running:
 
 ```bash
 source ./init
-run hello/worker
+run --background hello/worker
 run hello/starter
 ```
+
+`run --background` returns the launched process-group ID while leaving its
+output attached to the current shell. A process group is used so stopping the
+reported group also stops wrappers such as `go run` and their compiled child.
+Use it for an interactive learning session; use `temporal_dev_start` or the
+optional user service when the local Temporal Service itself needs supervision.
 
 The Worker is long-running. The starter should submit a Workflow and exit after
 retrieving its result. Run them in separate terminals.
