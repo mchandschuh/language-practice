@@ -19,7 +19,9 @@ func main() {
 
 	w := worker.New(c, hello.TaskQueue, worker.Options{})
 	w.RegisterWorkflow(hello.HelloWorkflow)
+	w.RegisterWorkflow(hello.RetryWorkflow)
 	w.RegisterActivity(hello.HelloActivity)
+	w.RegisterActivity(hello.RetryActivity)
 
 	if err := w.Run(worker.InterruptCh()); err != nil {
 		log.Fatalln("Unable to start hello/worker", err)
